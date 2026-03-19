@@ -1,0 +1,315 @@
+USE quan_ly_doi_xe;
+
+-- =====================================================
+-- BỔ SUNG DỮ LIỆU CHO TẤT CẢ CÁC BẢNG
+-- Ngày tạo: 2026-01-12
+-- =====================================================
+
+-- =====================================================
+-- 1. BỔ SUNG TÀI XẾ (TX006 → TX014)
+-- =====================================================
+INSERT INTO tai_xe
+(ma_nhan_vien, ho_ten, so_dien_thoai, email, so_bang_lai, hang_bang_lai, han_bang_lai, dia_chi, ngay_sinh, ngay_vao_lam, trang_thai)
+VALUES
+('TX006','Vũ Thanh Phong','0906789012','phong.vu@fleet.vn','B2-678901','D','2027-04-20','Gò Vấp','1987-08-15','2019-02-10','dang_lam'),
+('TX007','Đỗ Quang Hải','0907890123','hai.do@fleet.vn','B2-789012','C','2026-09-15','Q7 TP.HCM','1991-04-22','2021-08-15','dang_lam'),
+('TX008','Bùi Văn Khoa','0908901234','khoa.bui@fleet.vn','B2-890123','E','2027-02-28','Thủ Đức','1984-12-05','2017-05-20','dang_lam'),
+('TX009','Ngô Minh Tuấn','0909012345','tuan.ngo@fleet.vn','B2-901234','D','2026-06-10','Q9 TP.HCM','1989-01-18','2020-04-01','dang_lam'),
+('TX010','Đinh Công Thành','0910123456','thanh.dinh@fleet.vn','B2-012345','C','2027-08-05','Bình Dương','1993-09-30','2022-07-15','dang_lam'),
+('TX011','Lý Văn Hùng','0911234567','hung.ly@fleet.vn','B2-112233','E','2026-12-20','Q12 TP.HCM','1986-06-25','2018-11-10','dang_lam'),
+('TX012','Trương Quốc Bảo','0912345678','bao.truong@fleet.vn','B2-223344','D','2027-03-15','Tân Phú','1990-03-12','2021-01-20','dang_lam'),
+('TX013','Phan Văn Long','0913456789','long.phan@fleet.vn','B2-334455','C','2026-07-25','Bình Tân','1988-11-08','2019-09-05','nghi_phep'),
+('TX014','Cao Đức Trí','0914567890','tri.cao@fleet.vn','B2-445566','E','2027-05-30','Củ Chi','1985-02-28','2016-03-15','dang_lam');
+
+-- =====================================================
+-- 2. BỔ SUNG LOẠI BẢO TRÌ
+-- =====================================================
+INSERT INTO loai_bao_tri
+(ten_loai, ma_loai, chu_ky_ngay, chu_ky_km, canh_bao_truoc_ngay, canh_bao_truoc_km, chi_phi_uoc_tinh, bat_buoc, mo_ta)
+VALUES
+('Thay má phanh','BRAKE_PAD',NULL,40000,10,2000,2500000,TRUE,'Thay má phanh định kỳ'),
+('Thay ắc quy','BATTERY',730,NULL,30,NULL,3500000,FALSE,'Thay ắc quy (2 năm)'),
+('Bảo dưỡng điều hòa','AC_SERVICE',365,NULL,15,NULL,1200000,FALSE,'Vệ sinh, nạp gas điều hòa'),
+('Cân chỉnh bánh xe','WHEEL_ALIGN',NULL,30000,7,1500,500000,FALSE,'Cân chỉnh góc đặt bánh'),
+('Thay lọc gió','AIR_FILTER',NULL,15000,7,1000,350000,TRUE,'Thay lọc gió động cơ'),
+('Thay dầu hộp số','TRANS_OIL',NULL,50000,10,3000,1800000,TRUE,'Thay dầu hộp số'),
+('Kiểm tra hệ thống điện','ELEC_CHECK',180,NULL,15,NULL,800000,FALSE,'Kiểm tra toàn bộ hệ thống điện'),
+('Thay dây curoa','BELT_CHANGE',NULL,80000,15,5000,1500000,TRUE,'Thay dây curoa động cơ');
+
+-- =====================================================
+-- 3. BỔ SUNG XE (Đa dạng loại xe)
+-- =====================================================
+INSERT INTO xe
+(bien_so, loai_xe_id, hang_xe, dong_xe, nam_san_xuat, mau_xe, so_khung, so_may, dung_tich_binh,
+ so_km_hien_tai, han_dang_kiem, han_bao_hiem, han_phi_duong_bo,
+ ngay_bao_duong_gan_nhat, km_bao_duong_tiep_theo,
+ ngay_thay_lop, km_thay_lop_tiep_theo,
+ trang_thai, tai_xe_hien_tai, ma_gps)
+VALUES
+-- Xe tải nhẹ
+('51C-54321',1,'Kia','K200',2021,'Xanh','KNAK200X','D4CB456',55,62150,'2026-05-20','2026-06-15','2026-05-01','2025-10-15',70000,'2025-08-20',80000,'hoat_dong',3,'GPS002'),
+('51C-11111',1,'Hyundai','Porter H150',2023,'Trắng','KMFH150Y','D4CB789',60,28500,'2026-08-10','2026-09-01','2026-08-01','2025-12-20',35000,'2025-12-01',45000,'hoat_dong',5,'GPS003'),
+
+-- Xe tải trung
+('51D-33333',2,'Hino','300 Series',2021,'Trắng','JHDHINO3','J05ETA',140,98500,'2026-04-15','2026-05-10','2026-04-01','2025-11-25',105000,'2025-09-15',115000,'hoat_dong',6,'GPS005'),
+('51D-44444',2,'Isuzu','NQR75',2020,'Trắng','JAANQR75','4HK1ABC',145,142300,'2026-02-10','2026-03-05','2026-02-01','2025-10-10',150000,'2025-07-20',160000,'bao_duong',NULL,'GPS006'),
+
+-- Xe tải nặng
+('51H-55555',3,'Hyundai','HD320',2020,'Trắng','KMFHD320','D6AC012',380,198750,'2026-03-20','2026-04-15','2026-03-01','2025-09-30',205000,'2025-05-10',215000,'hoat_dong',8,'GPS008'),
+
+-- Container 20ft
+('51R-66666',4,'Daewoo','Prima',2022,'Trắng','KLDPRIMA','DE12TIS',480,87650,'2026-06-15','2026-07-10','2026-06-01','2025-12-05',95000,'2025-11-15',105000,'hoat_dong',11,'GPS010'),
+
+-- Container 40ft
+('51R-77777',5,'Hyundai','Xcient',2021,'Trắng','KMFXCIEN','D6CC789',520,165800,'2026-04-25','2026-05-20','2026-04-15','2025-10-20',175000,'2025-08-10',185000,'hoat_dong',14,'GPS011'),
+
+-- Xe khách 16 chỗ
+('51B-88888',6,'Ford','Transit',2022,'Bạc','WFOTRANS','DURATORQ',80,54200,'2026-07-05','2026-08-01','2026-07-01','2025-11-15',60000,'2025-10-01',70000,'hoat_dong',7,'GPS012'),
+
+-- Xe khách 29 chỗ
+('51B-99999',7,'Hyundai','County',2020,'Trắng','KMJCOUNT','D4DD456',120,132500,'2026-02-25','2026-03-20','2026-02-15','2025-08-20',140000,'2025-06-15',150000,'hoat_dong',9,'GPS013'),
+
+-- Xe khách 45 chỗ
+('51B-00000',8,'Thaco','Universe',2021,'Xanh','TCOUNIVE','WP12ABC',200,178900,'2026-05-10','2026-06-05','2026-05-01','2025-09-10',185000,'2025-07-01',195000,'hoat_dong',12,'GPS014'),
+
+-- Xe bán tải
+('51A-22222',10,'Ford','Ranger',2023,'Đỏ','WFAFRANGER','PUMA2L',80,25600,'2026-09-15','2026-10-10','2026-09-01','2025-12-10',35000,'2025-12-01',45000,'hoat_dong',10,'GPS016'),
+('51A-33333',10,'Toyota','Hilux',2022,'Đen','JTHTDHLX','GD2500',80,48750,'2026-06-20','2026-07-15','2026-06-01','2025-10-25',55000,'2025-09-20',65000,'hoat_dong',NULL,'GPS017');
+
+-- =====================================================
+-- 4. BỔ SUNG ĐỔ NHIÊN LIỆU (Đa dạng xe và tài xế)
+-- =====================================================
+INSERT INTO do_nhien_lieu
+(xe_id, tai_xe_id, thoi_gian_do, tram_xang, loai_nhien_lieu,
+ so_lit, gia_moi_lit, tong_tien,
+ km_truoc, km_sau, quang_duong,
+ muc_tieu_hao, bat_thuong, ty_le_vuot_dinh_muc, trang_thai_duyet)
+VALUES
+-- Tháng 12/2025
+(1,1,'2025-12-01 08:00:00','Petrolimex Tân Bình','dau_diesel',40,22100,884000,44500,44750,250,16.00,TRUE,33.33,'da_duyet'),
+(1,1,'2025-12-08 14:30:00','PV Oil Bình Thạnh','dau_diesel',38,22150,841700,44750,45000,250,15.20,TRUE,26.67,'da_duyet'),
+(3,3,'2025-12-02 07:15:00','Petrolimex QL51','dau_diesel',45,22000,990000,61500,61850,350,12.86,TRUE,7.14,'da_duyet'),
+(3,3,'2025-12-10 16:45:00','Shell Biên Hòa','dau_diesel',42,22300,936600,61850,62150,300,14.00,TRUE,16.67,'da_duyet'),
+(4,6,'2025-12-05 06:30:00','Petrolimex Thủ Đức','dau_diesel',110,22000,2420000,97800,98200,400,27.50,TRUE,52.78,'cho_duyet'),
+(4,6,'2025-12-12 09:00:00','PV Oil Long Thành','dau_diesel',95,22100,2099500,98200,98500,300,31.67,TRUE,76.04,'cho_duyet'),
+(5,NULL,'2025-12-03 11:20:00','Petrolimex Q7','dau_diesel',120,22050,2646000,141500,141900,400,30.00,TRUE,66.67,'tu_choi'),
+(6,8,'2025-12-07 13:45:00','Shell Bình Dương','dau_diesel',280,21900,6132000,197500,198250,750,37.33,TRUE,33.33,'da_duyet'),
+(6,8,'2025-12-14 08:15:00','Petrolimex Dĩ An','dau_diesel',250,22000,5500000,198250,198750,500,50.00,TRUE,78.57,'cho_duyet'),
+
+-- Tháng 01/2026
+(1,1,'2026-01-02 09:30:00','Petrolimex Q1','dau_diesel',35,22200,777000,45230,45450,220,15.91,TRUE,32.58,'cho_duyet'),
+(1,1,'2026-01-08 15:00:00','PV Oil Gò Vấp','dau_diesel',32,22150,708800,45450,45680,230,13.91,TRUE,15.94,'cho_duyet'),
+(3,3,'2026-01-03 07:45:00','Petrolimex Q9','dau_diesel',40,22100,884000,62150,62480,330,12.12,TRUE,1.01,'da_duyet'),
+(7,11,'2026-01-05 06:00:00','Shell Cát Lái','dau_diesel',350,21950,7682500,86500,87150,650,53.85,TRUE,68.28,'cho_duyet'),
+(7,11,'2026-01-10 14:30:00','Petrolimex QL1A','dau_diesel',280,22000,6160000,87150,87650,500,56.00,TRUE,75.00,'cho_duyet'),
+(8,14,'2026-01-04 05:30:00','Petrolimex Bình Chánh','dau_diesel',380,21900,8322000,164500,165300,800,47.50,TRUE,35.71,'da_duyet'),
+(8,14,'2026-01-11 16:15:00','PV Oil Cần Giuộc','dau_diesel',320,22000,7040000,165300,165800,500,64.00,TRUE,82.86,'cho_duyet'),
+(9,7,'2026-01-06 10:00:00','Shell Q7','dau_diesel',55,22200,1221000,53500,53900,400,13.75,FALSE,-1.79,'da_duyet'),
+(9,7,'2026-01-12 08:45:00','Petrolimex Phú Mỹ Hưng','dau_diesel',50,22150,1107500,53900,54200,300,16.67,TRUE,19.07,'cho_duyet'),
+(10,9,'2026-01-07 07:30:00','Petrolimex Thủ Thiêm','dau_diesel',85,22100,1878500,131500,132000,500,17.00,FALSE,-15.00,'da_duyet'),
+(10,9,'2026-01-11 13:00:00','PV Oil Q2','dau_diesel',80,22000,1760000,132000,132500,500,16.00,FALSE,-20.00,'da_duyet'),
+(11,12,'2026-01-08 06:15:00','Petrolimex Hóc Môn','dau_diesel',150,22050,3307500,177500,178200,700,21.43,FALSE,-14.29,'da_duyet'),
+(11,12,'2026-01-12 11:30:00','Shell Củ Chi','dau_diesel',140,22100,3094000,178200,178900,700,20.00,FALSE,-20.00,'da_duyet'),
+(12,10,'2026-01-05 09:00:00','Petrolimex Tân Phú','dau_diesel',48,22300,1070400,24800,25300,500,9.60,FALSE,-4.00,'da_duyet'),
+(12,10,'2026-01-10 14:45:00','PV Oil Q11','dau_diesel',45,22200,999000,25300,25600,300,15.00,TRUE,50.00,'cho_duyet'),
+(13,NULL,'2026-01-06 08:30:00','Shell Tân Bình','dau_diesel',52,22150,1151800,47800,48350,550,9.45,FALSE,-5.45,'da_duyet'),
+(13,NULL,'2026-01-11 16:00:00','Petrolimex Bình Tân','dau_diesel',48,22100,1060800,48350,48750,400,12.00,TRUE,20.00,'cho_duyet'),
+
+-- Xe con dùng xăng
+(14,NULL,'2025-12-05 10:30:00','Petrolimex Lê Văn Sỹ','xang_95',35,25500,892500,31500,31900,400,8.75,TRUE,9.38,'da_duyet'),
+(14,NULL,'2025-12-15 17:00:00','Shell Nguyễn Văn Trỗi','xang_95',32,25600,819200,31900,32150,250,12.80,TRUE,60.00,'cho_duyet'),
+(14,NULL,'2026-01-03 09:15:00','PV Oil Q3','xang_95',30,25550,766500,32150,32500,350,8.57,TRUE,7.14,'da_duyet'),
+(14,NULL,'2026-01-10 15:30:00','Petrolimex Phú Nhuận','xang_95',28,25500,714000,32500,32850,350,8.00,FALSE,0.00,'cho_duyet');
+
+-- =====================================================
+-- 5. BỔ SUNG BẢO TRÌ
+-- =====================================================
+INSERT INTO bao_tri
+(xe_id, loai_bao_tri_id, ngay_du_kien, ngay_hoan_thanh, km_luc_bao_tri,
+ chi_phi_nhan_cong, chi_phi_phu_tung, chi_phi_khac, tong_chi_phi,
+ don_vi_bao_tri, trang_thai, ghi_chu)
+VALUES
+-- Bảo trì đã hoàn thành
+(1,3,'2025-10-15','2025-10-15',40000,200000,550000,50000,800000,'Garage Hoàng Long','hoan_thanh','Thay dầu 10W40'),
+(2,1,'2025-02-28','2025-02-27',120000,150000,350000,0,500000,'TT Đăng kiểm 50-05S','hoan_thanh','Đạt lần đầu'),
+(2,3,'2025-09-20','2025-09-20',125000,200000,580000,70000,850000,'Toyota Long Biên','hoan_thanh','Thay dầu tổng hợp'),
+(3,3,'2025-11-10','2025-11-10',61000,250000,620000,80000,950000,'Hyundai Phú Mỹ','hoan_thanh','Bảo dưỡng định kỳ'),
+(4,4,'2025-11-25','2025-11-25',95000,600000,2100000,300000,3000000,'Hino Việt Nam','hoan_thanh','Bảo dưỡng 100k km'),
+(5,1,'2025-02-10','2025-02-09',135000,150000,350000,0,500000,'TT Đăng kiểm 50-01S','hoan_thanh','Đạt'),
+(5,5,'2025-07-20','2025-07-20',140000,800000,10500000,700000,12000000,'Lốp xe Minh Phát','hoan_thanh','Thay 10 lốp Bridgestone'),
+(6,3,'2025-09-30','2025-09-30',195000,300000,700000,100000,1100000,'Hyundai An Phú','hoan_thanh','Thay dầu + lọc'),
+(7,4,'2025-12-05','2025-12-05',85000,700000,2500000,400000,3600000,'Daewoo Bình Dương','hoan_thanh','Bảo dưỡng tổng thể'),
+(8,1,'2026-04-25','2026-04-24',163000,150000,350000,0,500000,'TT Đăng kiểm 50-07S','hoan_thanh','Đạt'),
+(9,6,'2025-11-15','2025-11-15',52000,180000,300000,50000,530000,'Ford An Lạc','hoan_thanh','Bảo dưỡng 50k'),
+(10,3,'2025-08-20','2025-08-20',128000,220000,600000,80000,900000,'Hyundai Ngọc An','hoan_thanh','Thay dầu động cơ'),
+(11,4,'2025-09-10','2025-09-10',175000,800000,2800000,400000,4000000,'Thaco Service','hoan_thanh','Bảo dưỡng lớn'),
+(12,3,'2025-12-10','2025-12-10',24000,150000,400000,50000,600000,'Ford Sài Gòn','hoan_thanh','Thay dầu + kiểm tra'),
+(13,8,'2025-09-20','2025-09-20',45000,180000,520000,100000,800000,'Toyota Đông Sài Gòn','hoan_thanh','Thay curoa'),
+
+-- Bảo trì đang thực hiện
+(5,3,'2026-01-10',NULL,142300,NULL,NULL,NULL,NULL,'Isuzu Thủ Đức','dang_lam','Đang thay dầu'),
+
+-- Bảo trì đã lên lịch
+(1,3,'2026-02-15',NULL,NULL,NULL,NULL,NULL,NULL,'Garage Hoàng Long','len_lich','Thay dầu định kỳ'),
+(1,5,'2026-06-15',NULL,NULL,NULL,NULL,NULL,NULL,'Lốp xe Minh Phát','len_lich','Thay 4 lốp'),
+(2,5,'2026-03-10',NULL,NULL,NULL,NULL,NULL,NULL,'Lốp xe Toàn Thắng','len_lich','Thay 6 lốp'),
+(3,4,'2026-02-20',NULL,NULL,NULL,NULL,NULL,NULL,'Hyundai Phú Mỹ','len_lich','Bảo dưỡng 70k'),
+(4,3,'2026-01-20',NULL,NULL,NULL,NULL,NULL,NULL,'Hino Việt Nam','len_lich','Thay dầu'),
+(6,5,'2026-02-20',NULL,NULL,NULL,NULL,NULL,NULL,'Lốp xe Đại Nam','len_lich','Thay 12 lốp xe tải'),
+(7,4,'2026-02-10',NULL,NULL,NULL,NULL,NULL,NULL,'Daewoo Bình Dương','len_lich','Bảo dưỡng 95k'),
+(8,3,'2026-02-05',NULL,NULL,NULL,NULL,NULL,NULL,'Hyundai An Phú','len_lich','Thay dầu'),
+(9,7,'2026-01-20',NULL,NULL,NULL,NULL,NULL,NULL,'Ford An Lạc','len_lich','Kiểm tra hệ thống điện'),
+(10,5,'2026-06-15',NULL,NULL,NULL,NULL,NULL,NULL,'Hyundai Ngọc An','len_lich','Thay lốp 150k'),
+(11,3,'2026-01-25',NULL,NULL,NULL,NULL,NULL,NULL,'Thaco Service','len_lich','Thay dầu định kỳ'),
+(12,4,'2026-03-01',NULL,NULL,NULL,NULL,NULL,NULL,'Ford Sài Gòn','len_lich','Bảo dưỡng 35k'),
+(13,3,'2026-02-01',NULL,NULL,NULL,NULL,NULL,NULL,'Toyota Đông Sài Gòn','len_lich','Thay dầu 55k'),
+(14,3,'2026-02-20',NULL,NULL,NULL,NULL,NULL,NULL,'Toyota Tân Cảng','len_lich','Thay dầu 40k'),
+
+-- Bảo trì quá hạn
+(2,1,'2026-01-05',NULL,125680,NULL,NULL,NULL,NULL,'TT Đăng kiểm 50-05S','qua_han','Đăng kiểm quá hạn 7 ngày!');
+
+-- =====================================================
+-- 6. BỔ SUNG CẢNH BÁO
+-- =====================================================
+INSERT INTO canh_bao
+(xe_id, tai_xe_id, loai_canh_bao, muc_do, tieu_de, noi_dung, da_doc)
+VALUES
+-- Cảnh báo nhiên liệu bất thường
+(3,3,'nhien_lieu_bat_thuong','trung_binh','Tiêu hao tăng nhẹ','Xe 51C-54321 tiêu hao tăng 16.67% so với định mức',FALSE),
+(4,6,'nhien_lieu_bat_thuong','cao','Tiêu hao cao bất thường','Xe 51D-33333 vượt định mức 76.04%',FALSE),
+(5,NULL,'nhien_lieu_bat_thuong','nghiem_trong','Tiêu hao RẤT cao','Xe 51D-44444 vượt định mức 66.67% - Cần kiểm tra ngay!',FALSE),
+(6,8,'nhien_lieu_bat_thuong','cao','Tiêu hao tăng đáng kể','Xe 51H-55555 vượt định mức 78.57%',FALSE),
+(7,11,'nhien_lieu_bat_thuong','nghiem_trong','Tiêu hao cực cao','Xe 51R-66666 vượt định mức 75%',FALSE),
+(8,14,'nhien_lieu_bat_thuong','nghiem_trong','Kiểm tra gấp','Xe 51R-77777 vượt định mức 82.86%',FALSE),
+(12,10,'nhien_lieu_bat_thuong','trung_binh','Tiêu hao tăng','Xe 51A-22222 vượt định mức 50%',FALSE),
+(13,NULL,'nhien_lieu_bat_thuong','thap','Tiêu hao nhẹ tăng','Xe 51A-33333 vượt định mức 20%',FALSE),
+(14,NULL,'nhien_lieu_bat_thuong','cao','Tiêu hao cao','Xe 51A-67890 vượt định mức 60%',TRUE),
+
+-- Cảnh báo đăng kiểm
+(3,NULL,'sap_het_han_dang_kiem','cao','Sắp hết hạn đăng kiểm','Xe 51H-34567 còn 2 ngày (10/01/2026)',TRUE),
+(5,NULL,'sap_het_han_dang_kiem','trung_binh','Đăng kiểm sắp hết','Xe 51D-44444 còn 29 ngày',FALSE),
+(2,NULL,'qua_han','nghiem_trong','Quá hạn đăng kiểm!','Xe 51D-23456 đã quá hạn 7 ngày!',FALSE),
+
+-- Cảnh báo bảo hiểm
+(3,NULL,'sap_het_han_bao_hiem','cao','Bảo hiểm sắp hết','Xe 51H-34567 còn 13 ngày',FALSE),
+(2,NULL,'sap_het_han_bao_hiem','nghiem_trong','Bảo hiểm sắp hết','Xe 51D-23456 còn 3 ngày',FALSE),
+
+-- Cảnh báo bảo trì
+(1,NULL,'den_han_bao_tri','trung_binh','Sắp đến hạn thay dầu','Xe 51C-12345 còn 770 km',FALSE),
+(4,NULL,'den_han_bao_tri','cao','Cần bảo dưỡng','Xe 51D-33333 sắp đến 105k km',FALSE),
+(6,NULL,'den_han_bao_tri','cao','Sắp thay lốp','Xe 51H-55555 còn 6250 km đến hạn thay lốp',FALSE),
+(5,NULL,'den_han_bao_tri','nghiem_trong','Quá hạn bảo dưỡng','Xe 51D-44444 đã vượt 7300 km chưa bảo dưỡng',FALSE),
+
+-- Cảnh báo bằng lái
+(NULL,13,'he_thong','cao','Tài xế nghỉ phép','TX013 Phan Văn Long đang nghỉ phép',TRUE),
+(NULL,15,'he_thong','cao','GPLX sắp hết hạn','TX015 Dương Văn Sơn còn 3 ngày hạn bằng lái',FALSE);
+
+-- =====================================================
+-- 7. BỔ SUNG CHUYẾN ĐI
+-- =====================================================
+INSERT INTO chuyen_di
+(xe_id, tai_xe_id, ma_chuyen, ngay_chuyen, diem_di, diem_den,
+ thoi_gian_xuat_phat, thoi_gian_ve, khoang_cach_thuc_te, trang_thai, ghi_chu)
+VALUES
+-- Tháng 12/2025 - Hoàn thành
+('1','1','CD-2025-003','2025-12-18','Kho Tân Bình','AEON Bình Dương','2025-12-18 05:30','2025-12-18 09:00',62.5,'hoan_thanh','Giao hàng siêu thị'),
+('1','1','CD-2025-004','2025-12-20','Kho Tân Bình','Metro An Phú','2025-12-20 06:00','2025-12-20 08:15',35,'hoan_thanh','Đơn hàng Metro'),
+('1','1','CD-2025-005','2025-12-22','Kho Tân Bình','BigC Thủ Đức','2025-12-22 05:45','2025-12-22 08:30',42,'hoan_thanh','Giao hàng BigC'),
+('2','2','CD-2025-003','2025-12-15','Cảng Cát Lái','KCN Amata','2025-12-15 04:30','2025-12-15 08:00',85,'hoan_thanh','Container nguyên liệu'),
+('2','2','CD-2025-004','2025-12-18','Cảng Cát Lái','KCN VSIP','2025-12-18 05:00','2025-12-18 09:30',95,'hoan_thanh','Container máy móc'),
+('2','2','CD-2025-005','2025-12-22','Cảng Hiệp Phước','KCN Long Hậu','2025-12-22 06:00','2025-12-22 08:30',45,'hoan_thanh','Hàng xuất khẩu'),
+('3','3','CD-2025-001','2025-12-12','Kho Q9','Vinmart Đồng Nai','2025-12-12 06:00','2025-12-12 09:30',55,'hoan_thanh','Giao hàng FMCG'),
+('3','3','CD-2025-002','2025-12-16','Kho Q9','Coopmart Long Thành','2025-12-16 05:30','2025-12-16 08:00',48,'hoan_thanh','Đơn hàng Coopmart'),
+('3','3','CD-2025-003','2025-12-20','Kho Q9','Lotte Biên Hòa','2025-12-20 06:15','2025-12-20 09:45',52,'hoan_thanh','Giao hàng Lotte'),
+('4','6','CD-2025-001','2025-12-10','Kho Thủ Đức','MM Mega Market','2025-12-10 05:00','2025-12-10 07:30',28,'hoan_thanh','Hàng thực phẩm'),
+('4','6','CD-2025-002','2025-12-14','Kho Thủ Đức','Emart Phan Văn Trị','2025-12-14 06:00','2025-12-14 08:45',35,'hoan_thanh','Đơn hàng Emart'),
+('6','8','CD-2025-001','2025-12-08','Cảng ICD','KCN Tân Tạo','2025-12-08 04:00','2025-12-08 07:30',75,'hoan_thanh','Container 20ft'),
+('6','8','CD-2025-002','2025-12-12','Cảng Cát Lái','Bình Dương','2025-12-12 05:00','2025-12-12 10:00',85,'hoan_thanh','Hàng xuất nhập'),
+('7','11','CD-2025-001','2025-12-05','Cảng Cát Lái','Long An','2025-12-05 04:30','2025-12-05 08:00',65,'hoan_thanh','Container 20ft'),
+('7','11','CD-2025-002','2025-12-09','Cảng Hiệp Phước','KCN Tân Kim','2025-12-09 05:00','2025-12-09 08:30',55,'hoan_thanh','Hàng xuất khẩu'),
+('8','14','CD-2025-001','2025-12-07','Cảng ICD Phước Long','Bình Phước','2025-12-07 03:30','2025-12-07 10:00',145,'hoan_thanh','Container 40ft'),
+('8','14','CD-2025-002','2025-12-11','Cảng Cát Lái','Tây Ninh','2025-12-11 04:00','2025-12-11 11:30',165,'hoan_thanh','Hàng máy móc'),
+('9','7','CD-2025-001','2025-12-06','VP Quận 1','Sân bay TSN','2025-12-06 08:00','2025-12-06 09:30',12,'hoan_thanh','Đưa khách VIP'),
+('9','7','CD-2025-002','2025-12-13','VP Quận 1','KCN Long Hậu','2025-12-13 07:30','2025-12-13 10:00',45,'hoan_thanh','Đưa đoàn khách'),
+('9','7','CD-2025-003','2025-12-18','VP Quận 1','Vũng Tàu','2025-12-18 06:00','2025-12-18 14:00',125,'hoan_thanh','Team building'),
+('10','9','CD-2025-001','2025-12-05','Bến xe Miền Đông','Đà Lạt','2025-12-05 05:00','2025-12-05 13:00',305,'hoan_thanh','Chuyến khách 29 chỗ'),
+('10','9','CD-2025-002','2025-12-12','Bến xe Q8','Phan Thiết','2025-12-12 06:00','2025-12-12 10:30',198,'hoan_thanh','Tour du lịch'),
+('11','12','CD-2025-001','2025-12-08','Bến xe Miền Tây','Cần Thơ','2025-12-08 05:00','2025-12-08 09:00',170,'hoan_thanh','Xe khách 45 chỗ'),
+('11','12','CD-2025-002','2025-12-15','VP Quận 3','Vũng Tàu','2025-12-15 06:30','2025-12-15 14:30',125,'hoan_thanh','Tour công ty'),
+('12','10','CD-2025-001','2025-12-10','VP Gò Vấp','Long An','2025-12-10 08:00','2025-12-10 11:00',55,'hoan_thanh','Khảo sát công trình'),
+('12','10','CD-2025-002','2025-12-17','VP Gò Vấp','Bình Dương','2025-12-17 07:30','2025-12-17 10:30',45,'hoan_thanh','Giao thiết bị'),
+
+-- Tháng 01/2026 - Hoàn thành
+('1','1','CD-2026-001','2026-01-02','Kho Tân Bình','BigC Đồng Nai','2026-01-02 06:00','2026-01-02 09:00',55,'hoan_thanh','Giao hàng đầu năm'),
+('1','1','CD-2026-002','2026-01-05','Kho Tân Bình','AEON Tân Phú','2026-01-05 05:30','2026-01-05 07:30',25,'hoan_thanh','Đơn hàng AEON'),
+('1','1','CD-2026-003','2026-01-08','Kho Tân Bình','Metro Q2','2026-01-08 06:00','2026-01-08 08:30',32,'hoan_thanh','Giao hàng Metro'),
+('3','3','CD-2026-001','2026-01-03','Kho Q9','Vinmart Thủ Đức','2026-01-03 06:15','2026-01-03 08:00',22,'hoan_thanh','Đơn hàng Vinmart'),
+('3','3','CD-2026-002','2026-01-07','Kho Q9','BigC Biên Hòa','2026-01-07 05:45','2026-01-07 09:00',50,'hoan_thanh','Giao hàng BigC'),
+('7','11','CD-2026-001','2026-01-05','Cảng Cát Lái','KCN Nhơn Trạch','2026-01-05 04:30','2026-01-05 08:30',70,'hoan_thanh','Container 20ft'),
+('8','14','CD-2026-001','2026-01-04','Cảng ICD','Bình Dương','2026-01-04 05:00','2026-01-04 09:00',65,'hoan_thanh','Container 40ft'),
+('9','7','CD-2026-001','2026-01-06','VP Quận 1','Củ Chi','2026-01-06 07:00','2026-01-06 10:30',45,'hoan_thanh','Đưa khách tham quan'),
+('10','9','CD-2026-001','2026-01-08','Bến xe Miền Đông','Nha Trang','2026-01-08 04:00','2026-01-08 14:00',435,'hoan_thanh','Tour Nha Trang 3 ngày'),
+('11','12','CD-2026-001','2026-01-10','VP Quận 7','Mũi Né','2026-01-10 05:00','2026-01-10 11:30',220,'hoan_thanh','Tour công ty'),
+('12','10','CD-2026-001','2026-01-05','VP Gò Vấp','Tây Ninh','2026-01-05 07:00','2026-01-05 11:00',95,'hoan_thanh','Khảo sát dự án'),
+('12','10','CD-2026-002','2026-01-10','VP Gò Vấp','Long Thành','2026-01-10 08:30','2026-01-10 10:30',40,'hoan_thanh','Giao hàng'),
+
+-- Tháng 01/2026 - Đang chạy
+('1','1','CD-2026-004','2026-01-12','Kho Tân Bình','Coopmart Biên Hòa','2026-01-12 06:00',NULL,NULL,'dang_chay','Đang trên đường'),
+('4','6','CD-2026-001','2026-01-12','Kho Thủ Đức','AEON Long Biên','2026-01-12 05:30',NULL,NULL,'dang_chay','Chuyến xa'),
+('9','7','CD-2026-002','2026-01-12','VP Quận 1','Sân bay TSN','2026-01-12 10:00',NULL,NULL,'dang_chay','Đón khách'),
+
+-- Tháng 01/2026 - Kế hoạch
+('1','1','CD-2026-005','2026-01-13','Kho Tân Bình','BigC Q10','2026-01-13 06:00',NULL,NULL,'ke_hoach','Đơn hàng BigC'),
+('2','2','CD-2026-001','2026-01-13','Cảng Cát Lái','KCN VSIP II','2026-01-13 05:00',NULL,NULL,'ke_hoach','Container máy móc'),
+('3','3','CD-2026-003','2026-01-14','Kho Q9','Lotte Thủ Đức','2026-01-14 06:30',NULL,NULL,'ke_hoach','Đơn hàng Lotte'),
+('6','8','CD-2026-001','2026-01-14','Cảng ICD','Bình Dương','2026-01-14 04:00',NULL,NULL,'ke_hoach','Container nặng'),
+('7','11','CD-2026-002','2026-01-15','Cảng Hiệp Phước','Long An','2026-01-15 05:00',NULL,NULL,'ke_hoach','Hàng xuất khẩu'),
+('8','14','CD-2026-002','2026-01-15','Cảng Cát Lái','Tây Ninh','2026-01-15 04:00',NULL,NULL,'ke_hoach','Container 40ft'),
+('10','9','CD-2026-002','2026-01-16','Bến xe Miền Đông','Đà Lạt','2026-01-16 05:00',NULL,NULL,'ke_hoach','Tour Đà Lạt'),
+('11','12','CD-2026-002','2026-01-17','VP Quận 3','Phan Thiết','2026-01-17 06:00',NULL,NULL,'ke_hoach','Tour biển'),
+('12','10','CD-2026-003','2026-01-14','VP Gò Vấp','Củ Chi','2026-01-14 08:00',NULL,NULL,'ke_hoach','Khảo sát'),
+
+-- Chuyến bị hủy
+('13',NULL,'CD-2026-HUY-001','2026-01-10','VP Quận 1','Cần Thơ','2026-01-10 07:00',NULL,NULL,'huy','Khách hủy đặt xe');
+
+-- =====================================================
+-- CẬP NHẬT TAI_XE_HIEN_TAI CHO XE
+-- =====================================================
+UPDATE xe SET tai_xe_hien_tai = 3 WHERE bien_so = '51C-54321';
+UPDATE xe SET tai_xe_hien_tai = 5 WHERE bien_so = '51C-11111';
+UPDATE xe SET tai_xe_hien_tai = 6 WHERE bien_so = '51D-33333';
+UPDATE xe SET tai_xe_hien_tai = 8 WHERE bien_so = '51H-55555';
+UPDATE xe SET tai_xe_hien_tai = 11 WHERE bien_so = '51R-66666';
+UPDATE xe SET tai_xe_hien_tai = 14 WHERE bien_so = '51R-77777';
+UPDATE xe SET tai_xe_hien_tai = 7 WHERE bien_so = '51B-88888';
+UPDATE xe SET tai_xe_hien_tai = 9 WHERE bien_so = '51B-99999';
+UPDATE xe SET tai_xe_hien_tai = 12 WHERE bien_so = '51B-00000';
+UPDATE xe SET tai_xe_hien_tai = 10 WHERE bien_so = '51A-22222';
+
+-- =====================================================
+-- THỐNG KÊ SAU KHI BỔ SUNG
+-- =====================================================
+-- SELECT 'loai_xe' as bang, COUNT(*) as so_ban_ghi FROM loai_xe
+-- UNION ALL SELECT 'tai_xe', COUNT(*) FROM tai_xe
+-- UNION ALL SELECT 'xe', COUNT(*) FROM xe
+-- UNION ALL SELECT 'loai_bao_tri', COUNT(*) FROM loai_bao_tri
+-- UNION ALL SELECT 'do_nhien_lieu', COUNT(*) FROM do_nhien_lieu
+-- UNION ALL SELECT 'bao_tri', COUNT(*) FROM bao_tri
+-- UNION ALL SELECT 'canh_bao', COUNT(*) FROM canh_bao
+-- UNION ALL SELECT 'chuyen_di', COUNT(*) FROM chuyen_di;
+
+-- =====================================================
+-- LIÊN KẾT TÀI KHOẢN NGƯỜI DÙNG VỚI TÀI XẾ
+-- Chạy lệnh này để liên kết user với tài xế
+-- =====================================================
+-- Cập nhật tai_xe_id cho các user là tài xế dựa vào ho_ten hoặc email
+UPDATE nguoi_dung nd
+JOIN tai_xe tx ON nd.ho_ten = tx.ho_ten OR nd.email = tx.email
+SET nd.tai_xe_id = tx.id
+WHERE nd.vai_tro = 'tai_xe' AND nd.tai_xe_id IS NULL;
+
+-- Kiểm tra kết quả liên kết
+-- SELECT nd.id, nd.username, nd.ho_ten, nd.vai_tro, nd.tai_xe_id, tx.ho_ten as ten_tai_xe 
+-- FROM nguoi_dung nd 
+-- LEFT JOIN tai_xe tx ON nd.tai_xe_id = tx.id
+-- WHERE nd.vai_tro = 'tai_xe';

@@ -1,0 +1,306 @@
+-- =====================================================
+-- CƠ SỞ DỮ LIỆU: QUẢN LÝ ĐỘI XE VẬN TẢI
+-- =====================================================
+
+DROP DATABASE IF EXISTS quan_ly_doi_xe;
+CREATE DATABASE quan_ly_doi_xe
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+USE quan_ly_doi_xe;
+
+-- =====================================================
+-- 1. LOẠI XE
+-- =====================================================
+CREATE TABLE loai_xe (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ten_loai_xe VARCHAR(50) NOT NULL,
+    dinh_muc_nhien_lieu DECIMAL(5,2) NOT NULL,
+    nguong_canh_bao DECIMAL(5,2) NOT NULL,
+    mo_ta TEXT,
+    tao_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cap_nhat_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- =====================================================
+-- 2. TÀI XẾ
+-- =====================================================
+CREATE TABLE tai_xe (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ma_nhan_vien VARCHAR(20) UNIQUE NOT NULL,
+    ho_ten VARCHAR(100) NOT NULL,
+    so_dien_thoai VARCHAR(15),
+    email VARCHAR(100),
+    so_bang_lai VARCHAR(20) NOT NULL,
+    hang_bang_lai VARCHAR(10),
+    han_bang_lai DATE,
+    dia_chi TEXT,
+    ngay_sinh DATE,
+    ngay_vao_lam DATE,
+    trang_thai ENUM('dang_lam','nghi_phep','nghi_viec') DEFAULT 'dang_lam',
+    tao_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cap_nhat_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- =====================================================
+-- 3. XE
+-- =====================================================
+CREATE TABLE xe (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bien_so VARCHAR(15) UNIQUE NOT NULL,
+    loai_xe_id INT NOT NULL,
+    hang_xe VARCHAR(50),
+    dong_xe VARCHAR(50),
+    nam_san_xuat INT,
+    mau_xe VARCHAR(30),
+    so_khung VARCHAR(50),
+    so_may VARCHAR(50),
+    dung_tich_binh DECIMAL(6,2),
+    so_km_hien_tai DECIMAL(12,2) DEFAULT 0,
+
+    han_dang_kiem DATE,
+    han_bao_hiem DATE,
+    han_phi_duong_bo DATE,
+
+    ngay_bao_duong_gan_nhat DATE,
+    km_bao_duong_tiep_theo DECIMAL(12,2),
+    ngay_thay_lop DATE,
+    km_thay_lop_tiep_theo DECIMAL(12,2),
+
+    trang_thai ENUM('hoat_dong','bao_duong','tam_dung','thanh_ly') DEFAULT 'hoat_dong',
+    tai_xe_hien_tai INT,
+    ma_gps VARCHAR(50),
+
+    ghi_chu TEXT,
+    tao_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cap_nhat_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (loai_xe_id) REFERENCES loai_xe(id),
+    FOREIGN KEY (tai_xe_hien_tai) REFERENCES tai_xe(id)
+);
+
+-- =====================================================
+-- 4. ĐỔ NHIÊN LIỆU
+-- =====================================================
+CREATE TABLE do_nhien_lieu (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    xe_id INT NOT NULL,
+    tai_xe_id INT NOT NULL,
+
+    thoi_gian_do DATETIME NOT NULL,
+    tram_xang VARCHAR(100),
+    loai_nhien_lieu ENUM('xang_92','xang_95','dau_diesel','e5') DEFAULT 'dau_diesel',
+
+    so_lit DECIMAL(8,2) NOT NULL,
+    gia_moi_lit DECIMAL(10,2) NOT NULL,
+    tong_tien DECIMAL(12,2) NOT NULL,
+
+    km_truoc DECIMAL(12,2),
+    km_sau DECIMAL(12,2),
+    quang_duong DECIMAL(10,2),
+
+    muc_tieu_hao DECIMAL(6,2),
+    bat_thuong BOOLEAN DEFAULT FALSE,
+    ty_le_vuot_dinh_muc DECIMAL(5,2),
+
+    trang_thai_duyet ENUM('cho_duyet','da_duyet','tu_choi') DEFAULT 'cho_duyet',
+
+    ghi_chu TEXT,
+    tao_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (xe_id) REFERENCES xe(id),
+    FOREIGN KEY (tai_xe_id) REFERENCES tai_xe(id)
+);
+
+-- =====================================================
+-- 5. LOẠI BẢO TRÌ
+-- =====================================================
+CREATE TABLE loai_bao_tri (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ten_loai VARCHAR(100) NOT NULL,
+    ma_loai VARCHAR(20) UNIQUE NOT NULL,
+    chu_ky_ngay INT,
+    chu_ky_km INT,
+    canh_bao_truoc_ngay INT DEFAULT 30,
+    canh_bao_truoc_km INT DEFAULT 5000,
+    chi_phi_uoc_tinh DECIMAL(12,2),
+    bat_buoc BOOLEAN DEFAULT TRUE,
+    mo_ta TEXT,
+    tao_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =====================================================
+-- 6. BẢO TRÌ
+-- =====================================================
+CREATE TABLE bao_tri (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    xe_id INT NOT NULL,
+    loai_bao_tri_id INT NOT NULL,
+
+    ngay_du_kien DATE,
+    ngay_hoan_thanh DATE,
+    km_luc_bao_tri DECIMAL(12,2),
+
+    chi_phi_nhan_cong DECIMAL(12,2) DEFAULT 0,
+    chi_phi_phu_tung DECIMAL(12,2) DEFAULT 0,
+    chi_phi_khac DECIMAL(12,2) DEFAULT 0,
+    tong_chi_phi DECIMAL(12,2) DEFAULT 0,
+
+    don_vi_bao_tri VARCHAR(100),
+    trang_thai ENUM('len_lich','dang_lam','hoan_thanh','huy','qua_han') DEFAULT 'len_lich',
+
+    ghi_chu TEXT,
+    tao_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (xe_id) REFERENCES xe(id),
+    FOREIGN KEY (loai_bao_tri_id) REFERENCES loai_bao_tri(id)
+);
+
+-- =====================================================
+-- 7. CẢNH BÁO
+-- =====================================================
+CREATE TABLE canh_bao (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    xe_id INT,
+    tai_xe_id INT,
+
+    loai_canh_bao ENUM(
+        'nhien_lieu_bat_thuong',
+        'sap_het_han_dang_kiem',
+        'sap_het_han_bao_hiem',
+        'den_han_bao_tri',
+        'qua_han',
+        'he_thong'
+    ) NOT NULL,
+
+    muc_do ENUM('thap','trung_binh','cao','nghiem_trong') DEFAULT 'trung_binh',
+    tieu_de VARCHAR(200),
+    noi_dung TEXT,
+
+    da_doc BOOLEAN DEFAULT FALSE,
+    tao_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (xe_id) REFERENCES xe(id),
+    FOREIGN KEY (tai_xe_id) REFERENCES tai_xe(id)
+);
+
+-- =====================================================
+-- 8. CHUYẾN ĐI
+-- =====================================================
+CREATE TABLE chuyen_di (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    xe_id INT NOT NULL,
+    tai_xe_id INT NOT NULL,
+
+    ma_chuyen VARCHAR(20) UNIQUE,
+    ngay_chuyen DATE,
+
+    diem_di VARCHAR(200),
+    diem_den VARCHAR(200),
+
+    thoi_gian_xuat_phat DATETIME,
+    thoi_gian_ve DATETIME,
+
+    khoang_cach_thuc_te DECIMAL(10,2),
+
+    trang_thai ENUM('ke_hoach','dang_chay','hoan_thanh','huy') DEFAULT 'ke_hoach',
+
+    ghi_chu TEXT,
+    tao_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (xe_id) REFERENCES xe(id),
+    FOREIGN KEY (tai_xe_id) REFERENCES tai_xe(id)
+);
+
+-- =====================================================
+-- 9. VIEW: THỐNG KÊ TIÊU HAO NHIÊN LIỆU
+-- =====================================================
+CREATE VIEW v_thong_ke_nhien_lieu AS
+SELECT
+    x.bien_so,
+    lx.ten_loai_xe,
+    lx.dinh_muc_nhien_lieu,
+    SUM(dnl.so_lit) tong_nhien_lieu,
+    SUM(dnl.quang_duong) tong_quang_duong,
+    ROUND(SUM(dnl.so_lit)/SUM(dnl.quang_duong)*100,2) muc_tieu_hao_tb
+FROM xe x
+JOIN loai_xe lx ON x.loai_xe_id = lx.id
+JOIN do_nhien_lieu dnl ON x.id = dnl.xe_id
+GROUP BY x.id;
+
+-- =====================================================
+-- 10. PROCEDURE: TÍNH TIÊU HAO & PHÁT HIỆN BẤT THƯỜNG
+-- =====================================================
+DELIMITER //
+
+CREATE PROCEDURE sp_tinh_tieu_hao(IN p_id INT)
+BEGIN
+    DECLARE v_dinh_muc DECIMAL(5,2);
+    DECLARE v_so_lit DECIMAL(8,2);
+    DECLARE v_quang_duong DECIMAL(10,2);
+    DECLARE v_tieu_hao DECIMAL(6,2);
+    DECLARE v_ty_le DECIMAL(5,2);
+
+    SELECT lx.dinh_muc_nhien_lieu, dnl.so_lit, dnl.quang_duong
+    INTO v_dinh_muc, v_so_lit, v_quang_duong
+    FROM do_nhien_lieu dnl
+    JOIN xe x ON dnl.xe_id = x.id
+    JOIN loai_xe lx ON x.loai_xe_id = lx.id
+    WHERE dnl.id = p_id;
+
+    IF v_quang_duong > 0 THEN
+        SET v_tieu_hao = (v_so_lit / v_quang_duong) * 100;
+        SET v_ty_le = ((v_tieu_hao - v_dinh_muc)/v_dinh_muc)*100;
+
+        UPDATE do_nhien_lieu
+        SET muc_tieu_hao = v_tieu_hao,
+            ty_le_vuot_dinh_muc = v_ty_le,
+            bat_thuong = (v_ty_le > 20)
+        WHERE id = p_id;
+    END IF;
+END //
+
+DELIMITER ;
+
+-- =====================================================
+-- 11. TRIGGER: CẬP NHẬT KM XE
+-- =====================================================
+DELIMITER //
+
+CREATE TRIGGER tr_cap_nhat_km
+AFTER INSERT ON do_nhien_lieu
+FOR EACH ROW
+BEGIN
+    UPDATE xe
+    SET so_km_hien_tai = NEW.km_sau
+    WHERE id = NEW.xe_id AND NEW.km_sau > so_km_hien_tai;
+END //
+
+DELIMITER ;
+
+-- =====================================================
+-- BẢNG NGƯỜI DÙNG (Authentication)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS nguoi_dung (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    ho_ten VARCHAR(100) NOT NULL,
+    vai_tro ENUM('quan_ly', 'tai_xe') NOT NULL DEFAULT 'tai_xe',
+    so_dien_thoai VARCHAR(15),
+    tai_xe_id INT NULL,
+    trang_thai ENUM('hoat_dong', 'bi_khoa') DEFAULT 'hoat_dong',
+    tao_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cap_nhat_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (tai_xe_id) REFERENCES tai_xe(id) ON DELETE SET NULL
+);
+
+-- Tạo tài khoản admin mặc định (password: admin123)
+-- Password hash được tạo bằng bcrypt
+INSERT INTO nguoi_dung (username, password, email, ho_ten, vai_tro) VALUES
+('admin', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin@fleet.com', 'Quản trị viên', 'quan_ly');
+
+-- Tạo tài khoản tài xế mẫu (password: driver123)
+INSERT INTO nguoi_dung (username, password, email, ho_ten, vai_tro, tai_xe_id) VALUES
+('taixe1', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'taixe1@fleet.com', 'Nguyễn Văn An', 'tai_xe', 1);
