@@ -1,17 +1,22 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { authService } from '@/services/authService'
-import { vehicleService } from '@/services'
+import { vehicleService, alertService } from '@/services'
 
 const sidebarOpen = ref(false)
 const route = useRoute()
 const router = useRouter()
+const currentUser = ref(authService.getUser())
+
+const refreshAuthState = () => {
+  currentUser.value = authService.getUser()
+}
 
 // Auth state
-const isAuthenticated = computed(() => authService.isAuthenticated())
-const user = computed(() => authService.getUser())
+const isAuthenticated = computed(() => !!authService.getToken())
+const user = computed(() => currentUser.value)
 const isManager = computed(() => user.value?.vai_tro === 'quan_ly')
 
 // Check if current route is auth page
@@ -29,6 +34,8 @@ const searchQuery = ref('')
 const searchResults = ref([])
 const showSearchResults = ref(false)
 const allVehicles = ref([])
+const unreadAlertCount = ref(0)
+let unreadPollingTimer = null
 
 // Fetch vehicles for search
 const fetchVehicles = async () => {
@@ -61,6 +68,15 @@ const handleSearch = () => {
 // Watch search query
 watch(searchQuery, handleSearch)
 
+watch(
+  () => route.fullPath,
+  () => {
+    // Keep user state in sync after login/logout navigation.
+    refreshAuthState()
+  },
+  { immediate: true }
+)
+
 // Go to vehicle detail
 const goToVehicle = (vehicleId) => {
   searchQuery.value = ''
@@ -73,10 +89,62 @@ const closeSearchResults = () => {
   showSearchResults.value = false
 }
 
+const fetchUnreadAlerts = async () => {
+  if (!isAuthenticated.value || !isManager.value) {
+    unreadAlertCount.value = 0
+    return
+  }
+
+  try {
+    const response = await alertService.getUnread()
+    unreadAlertCount.value = Array.isArray(response?.data) ? response.data.length : 0
+  } catch (err) {
+    console.error('Error fetching unread alerts:', err)
+  }
+}
+
+const handleNotificationClick = async () => {
+  if (route.path !== '/alerts') {
+    await router.push('/alerts')
+    return
+  }
+
+  await fetchUnreadAlerts()
+}
+
 // Load vehicles when authenticated
 watch(isAuthenticated, (val) => {
-  if (val) fetchVehicles()
+  if (val) {
+    fetchVehicles()
+    fetchUnreadAlerts()
+  } else {
+    unreadAlertCount.value = 0
+  }
 }, { immediate: true })
+
+watch(() => route.path, () => {
+  if (isManager.value) {
+    fetchUnreadAlerts()
+  }
+})
+
+onMounted(() => {
+  refreshAuthState()
+  window.addEventListener('storage', refreshAuthState)
+
+  if (isManager.value) {
+    fetchUnreadAlerts()
+    unreadPollingTimer = setInterval(fetchUnreadAlerts, 60000)
+  }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('storage', refreshAuthState)
+
+  if (unreadPollingTimer) {
+    clearInterval(unreadPollingTimer)
+  }
+})
 
 const menuItems = [
   { id: 'dashboard', path: '/', label: 'Dashboard', icon: 'mdi:view-dashboard' },
@@ -164,9 +232,9 @@ const userInitials = computed(() => {
         </div>
 
         <div class="topbar-right">
-          <button class="notification-btn">
+          <button class="notification-btn" @click="handleNotificationClick" title="Xem cảnh báo">
             <Icon icon="mdi:bell" class="icon-md" />
-            <span class="notification-badge"></span>
+            <span v-if="unreadAlertCount > 0" class="notification-badge">{{ unreadAlertCount > 99 ? '99+' : unreadAlertCount }}</span>
           </button>
           <div class="user-info">
             <div class="user-text">
@@ -458,12 +526,19 @@ body {
 
 .notification-badge {
   position: absolute;
-  top: 0.25rem;
-  right: 0.25rem;
-  width: 0.5rem;
-  height: 0.5rem;
+  top: -0.2rem;
+  right: -0.2rem;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.2rem;
   background: #ef4444;
-  border-radius: 50%;
+  color: #fff;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
 }
 
 .user-info {

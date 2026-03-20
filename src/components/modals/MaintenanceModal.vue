@@ -109,7 +109,7 @@ const handleClose = () => {
 const handleSave = () => {
   // Basic validation
   if (props.mode === 'add') {
-    if (!formData.value.vehicleId || !formData.value.maintenanceType || !formData.value.scheduledDate) {
+    if ((!formData.value.vehicleId && !formData.value.licensePlate) || !formData.value.maintenanceType || !formData.value.scheduledDate) {
       alert('Vui lòng điền đầy đủ thông tin bắt buộc!')
       return
     }

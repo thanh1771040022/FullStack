@@ -2,10 +2,31 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/database');
 
+const hasVehicleAccess = (scope, xeId) => {
+  if (scope?.isManager) return true;
+  return scope?.vehicleIds?.includes(Number(xeId));
+};
+
+const requireManager = (req, res) => {
+  if (!req.scope?.isManager) {
+    res.status(403).json({ success: false, message: 'Ban khong co quyen thuc hien thao tac nay' });
+    return false;
+  }
+  return true;
+};
+
 // GET all vehicles
 router.get('/', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM xe');
+    let rows;
+    if (req.scope?.isManager) {
+      [rows] = await pool.query('SELECT * FROM xe');
+    } else if (req.scope.vehicleIds.length > 0) {
+      const placeholders = req.scope.vehicleIds.map(() => '?').join(',');
+      [rows] = await pool.query(`SELECT * FROM xe WHERE id IN (${placeholders})`, req.scope.vehicleIds);
+    } else {
+      rows = [];
+    }
     res.json({ success: true, data: rows });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -15,12 +36,29 @@ router.get('/', async (req, res) => {
 // GET vehicles with driver info (JOIN) - MUST be before /:id
 router.get('/full/details', async (req, res) => {
   try {
-    const [rows] = await pool.query(`
-      SELECT x.*, lx.ten_loai_xe as loai_xe_ten, tx.ho_ten as tai_xe_ten, tx.so_dien_thoai as tai_xe_sdt
+    const baseQuery = `
+      SELECT
+        x.*,
+        lx.ten_loai_xe as loai_xe_ten,
+        lx.dinh_muc_nhien_lieu,
+        lx.nguong_canh_bao,
+        tx.ho_ten as tai_xe_ten,
+        tx.so_dien_thoai as tai_xe_sdt
       FROM xe x
       LEFT JOIN loai_xe lx ON x.loai_xe_id = lx.id
       LEFT JOIN tai_xe tx ON x.tai_xe_hien_tai = tx.id
-    `);
+    `;
+
+    let rows;
+    if (req.scope?.isManager) {
+      [rows] = await pool.query(baseQuery);
+    } else if (req.scope.vehicleIds.length > 0) {
+      const placeholders = req.scope.vehicleIds.map(() => '?').join(',');
+      [rows] = await pool.query(`${baseQuery} WHERE x.id IN (${placeholders})`, req.scope.vehicleIds);
+    } else {
+      rows = [];
+    }
+
     res.json({ success: true, data: rows });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -33,8 +71,9 @@ router.get('/stats/upcoming-expiries', async (req, res) => {
     const days = Number.parseInt(req.query.days, 10);
     const thresholdDays = Number.isFinite(days) && days > 0 ? days : 30;
 
-    const [rows] = await pool.query(
-      `SELECT
+    let rows;
+    const params = [thresholdDays, thresholdDays, thresholdDays];
+    let sql = `SELECT
         x.id AS xe_id,
         x.bien_so,
         lx.ten_loai_xe AS loai_xe_ten,
@@ -47,13 +86,27 @@ router.get('/stats/upcoming-expiries', async (req, res) => {
         DATEDIFF(x.ngay_thay_lop, CURDATE()) AS ngay_con_lai_thay_lop
       FROM xe x
       LEFT JOIN loai_xe lx ON x.loai_xe_id = lx.id
-      WHERE
+      WHERE (
         (x.han_dang_kiem IS NOT NULL AND DATEDIFF(x.han_dang_kiem, CURDATE()) <= ?)
         OR (x.han_bao_hiem IS NOT NULL AND DATEDIFF(x.han_bao_hiem, CURDATE()) <= ?)
         OR (x.ngay_thay_lop IS NOT NULL AND DATEDIFF(x.ngay_thay_lop, CURDATE()) <= ?)
-      ORDER BY x.id`,
-      [thresholdDays, thresholdDays, thresholdDays]
-    );
+      )
+      `;
+
+    if (!req.scope?.isManager) {
+      if (req.scope.vehicleIds.length === 0) {
+        rows = [];
+      } else {
+        const placeholders = req.scope.vehicleIds.map(() => '?').join(',');
+        sql += ` AND x.id IN (${placeholders})`;
+        params.push(...req.scope.vehicleIds);
+      }
+    }
+
+    if (!rows) {
+      sql += ' ORDER BY x.id';
+      [rows] = await pool.query(sql, params);
+    }
 
     const events = [];
     rows.forEach((row) => {
@@ -126,8 +179,18 @@ router.get('/stats/upcoming-expiries', async (req, res) => {
 // GET vehicle by ID
 router.get('/:id', async (req, res) => {
   try {
+    if (!hasVehicleAccess(req.scope, req.params.id)) {
+      return res.status(403).json({ success: false, message: 'Ban khong co quyen xem xe nay' });
+    }
+
     const [rows] = await pool.query(
-      `SELECT x.*, lx.ten_loai_xe as loai_xe_ten, tx.ho_ten as tai_xe_ten, tx.so_dien_thoai as tai_xe_sdt
+      `SELECT
+        x.*,
+        lx.ten_loai_xe as loai_xe_ten,
+        lx.dinh_muc_nhien_lieu,
+        lx.nguong_canh_bao,
+        tx.ho_ten as tai_xe_ten,
+        tx.so_dien_thoai as tai_xe_sdt
        FROM xe x
        LEFT JOIN loai_xe lx ON x.loai_xe_id = lx.id
        LEFT JOIN tai_xe tx ON x.tai_xe_hien_tai = tx.id
@@ -146,6 +209,8 @@ router.get('/:id', async (req, res) => {
 // POST create new vehicle
 router.post('/', async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+
     const { 
       bien_so, loai_xe_id, tai_xe_hien_tai, trang_thai, 
       nam_san_xuat, hang_xe, dong_xe, mau_xe, so_khung, so_may,
@@ -178,6 +243,8 @@ router.post('/', async (req, res) => {
 // PUT update vehicle
 router.put('/:id', async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+
     // Lấy dữ liệu xe hiện tại trước
     const [currentVehicle] = await pool.query('SELECT * FROM xe WHERE id = ?', [req.params.id]);
     if (currentVehicle.length === 0) {
@@ -245,6 +312,8 @@ router.put('/:id', async (req, res) => {
 // DELETE vehicle
 router.delete('/:id', async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+
     const [result] = await pool.query('DELETE FROM xe WHERE id = ?', [req.params.id]);
     
     if (result.affectedRows === 0) {

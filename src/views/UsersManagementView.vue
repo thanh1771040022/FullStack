@@ -42,7 +42,7 @@ const fetchUsers = async () => {
     const response = await userService.getAll()
     users.value = response.data || []
   } catch (err) {
-    error.value = err.response?.data?.message || 'Khong the tai danh sach nguoi dung.'
+    error.value = err.response?.data?.message || 'Không thể tải danh sách người dùng.'
   } finally {
     loading.value = false
   }
@@ -142,24 +142,24 @@ const submitForm = async () => {
     closeModal()
     await fetchUsers()
   } catch (err) {
-    error.value = err.response?.data?.message || 'Khong the luu nguoi dung.'
+    error.value = err.response?.data?.message || 'Không thể lưu người dùng.'
   } finally {
     saving.value = false
   }
 }
 
 const toggleUserStatus = async (user) => {
-  const nextStatus = user.trang_thai === 'hoat_dong' ? 'khoa' : 'hoat_dong'
+  const nextStatus = user.trang_thai === 'hoat_dong' ? 'bi_khoa' : 'hoat_dong'
   try {
     await userService.updateStatus(user.id, nextStatus)
     await fetchUsers()
   } catch (err) {
-    error.value = err.response?.data?.message || 'Khong the cap nhat trang thai user.'
+    error.value = err.response?.data?.message || 'Không thể cập nhật trạng thái người dùng.'
   }
 }
 
-const formatRole = (role) => (role === 'quan_ly' ? 'Quan ly' : 'Tai xe')
-const formatStatus = (status) => (status === 'hoat_dong' ? 'Hoat dong' : 'Da khoa')
+const formatRole = (role) => (role === 'quan_ly' ? 'Quản lý' : 'Tài xế')
+const formatStatus = (status) => (status === 'hoat_dong' ? 'Hoạt động' : 'Đã khóa')
 
 onMounted(() => {
   fetchUsers()
@@ -170,36 +170,36 @@ onMounted(() => {
   <div class="users-page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">Quan ly nguoi dung</h1>
-        <p class="page-subtitle">Admin tao/sua/khoa tai khoan va gan role</p>
+        <h1 class="page-title">Quản lý người dùng</h1>
+        <p class="page-subtitle">Admin tạo/sửa/khóa tài khoản và gán vai trò</p>
       </div>
       <div class="header-actions">
         <button class="btn btn-secondary" @click="openCreateUserModal">
           <Icon icon="mdi:account-plus" class="icon-sm" />
-          Tao user
+          Tạo user
         </button>
         <button class="btn btn-primary" @click="openCreateManagerModal">
           <Icon icon="mdi:shield-account" class="icon-sm" />
-          Tao tai khoan quan ly
+          Tạo tài khoản quản lý
         </button>
       </div>
     </div>
 
     <div class="stats-grid">
       <div class="stat-card">
-        <p class="label">Tong user</p>
+        <p class="label">Tổng user</p>
         <p class="value">{{ stats.total }}</p>
       </div>
       <div class="stat-card">
-        <p class="label">Quan ly</p>
+        <p class="label">Quản lý</p>
         <p class="value">{{ stats.managers }}</p>
       </div>
       <div class="stat-card">
-        <p class="label">Tai xe</p>
+        <p class="label">Tài xế</p>
         <p class="value">{{ stats.drivers }}</p>
       </div>
       <div class="stat-card">
-        <p class="label">Dang khoa</p>
+        <p class="label">Đang khóa</p>
         <p class="value">{{ stats.locked }}</p>
       </div>
     </div>
@@ -207,24 +207,24 @@ onMounted(() => {
     <div class="toolbar">
       <div class="search-box">
         <Icon icon="mdi:magnify" class="icon-sm" />
-        <input v-model="searchTerm" type="text" placeholder="Tim username, ho ten, email, role..." />
+        <input v-model="searchTerm" type="text" placeholder="Tìm username, họ tên, email, vai trò..." />
       </div>
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
 
     <div class="table-card">
-      <div v-if="loading" class="loading-state">Dang tai du lieu...</div>
+      <div v-if="loading" class="loading-state">Đang tải dữ liệu...</div>
       <table v-else>
         <thead>
           <tr>
             <th>ID</th>
             <th>Username</th>
-            <th>Ho ten</th>
+            <th>Họ tên</th>
             <th>Email</th>
-            <th>Vai tro</th>
-            <th>Trang thai</th>
-            <th>Thao tac</th>
+            <th>Vai trò</th>
+            <th>Trạng thái</th>
+            <th>Thao tác</th>
           </tr>
         </thead>
         <tbody>
@@ -244,12 +244,12 @@ onMounted(() => {
               </span>
             </td>
             <td class="actions">
-              <button class="btn-icon" @click="openEditModal(u)" title="Sua">
+              <button class="btn-icon" @click="openEditModal(u)" title="Sửa">
                 <Icon icon="mdi:pencil" class="icon-sm" />
               </button>
               <button
                 class="btn-icon"
-                :title="u.trang_thai === 'hoat_dong' ? 'Khoa tai khoan' : 'Mo khoa tai khoan'"
+                :title="u.trang_thai === 'hoat_dong' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'"
                 @click="toggleUserStatus(u)"
               >
                 <Icon :icon="u.trang_thai === 'hoat_dong' ? 'mdi:lock' : 'mdi:lock-open-variant'" class="icon-sm" />
@@ -257,7 +257,7 @@ onMounted(() => {
             </td>
           </tr>
           <tr v-if="filteredUsers.length === 0">
-            <td colspan="7" class="empty">Khong co nguoi dung nao.</td>
+            <td colspan="7" class="empty">Không có người dùng nào.</td>
           </tr>
         </tbody>
       </table>
@@ -265,7 +265,7 @@ onMounted(() => {
 
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal-card">
-        <h3>{{ mode === 'create' ? 'Tao nguoi dung moi' : 'Cap nhat nguoi dung' }}</h3>
+        <h3>{{ mode === 'create' ? 'Tạo người dùng mới' : 'Cập nhật người dùng' }}</h3>
 
         <div class="form-grid">
           <div class="form-group">
@@ -273,7 +273,7 @@ onMounted(() => {
             <input v-model="form.username" type="text" />
           </div>
           <div class="form-group">
-            <label>Ho ten</label>
+            <label>Họ tên</label>
             <input v-model="form.ho_ten" type="text" />
           </div>
           <div class="form-group">
@@ -281,35 +281,35 @@ onMounted(() => {
             <input v-model="form.email" type="email" />
           </div>
           <div class="form-group">
-            <label>So dien thoai</label>
+            <label>Số điện thoại</label>
             <input v-model="form.so_dien_thoai" type="text" maxlength="15" />
           </div>
           <div class="form-group">
-            <label>Vai tro</label>
+            <label>Vai trò</label>
             <select v-model="form.vai_tro">
-              <option value="quan_ly">Quan ly</option>
-              <option value="tai_xe">Tai xe</option>
+              <option value="quan_ly">Quản lý</option>
+              <option value="tai_xe">Tài xế</option>
             </select>
           </div>
           <div class="form-group">
-            <label>Trang thai</label>
+            <label>Trạng thái</label>
             <select v-model="form.trang_thai">
-              <option value="hoat_dong">Hoat dong</option>
-              <option value="khoa">Da khoa</option>
+              <option value="hoat_dong">Hoạt động</option>
+              <option value="bi_khoa">Đã khóa</option>
             </select>
           </div>
           <div class="form-group full-width">
             <label>
-              {{ mode === 'create' ? 'Mat khau' : 'Mat khau moi (de trong neu khong doi)' }}
+              {{ mode === 'create' ? 'Mật khẩu' : 'Mật khẩu mới (để trống nếu không đổi)' }}
             </label>
             <input v-model="form.password" type="password" />
           </div>
         </div>
 
         <div class="modal-actions">
-          <button class="btn btn-secondary" @click="closeModal">Huy</button>
+          <button class="btn btn-secondary" @click="closeModal">Hủy</button>
           <button class="btn btn-primary" :disabled="saving" @click="submitForm">
-            {{ saving ? 'Dang luu...' : 'Luu' }}
+            {{ saving ? 'Đang lưu...' : 'Lưu' }}
           </button>
         </div>
       </div>

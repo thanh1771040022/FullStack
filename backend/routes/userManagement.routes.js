@@ -4,8 +4,14 @@ const router = express.Router();
 const { pool } = require('../config/database');
 
 const allowedRoles = new Set(['quan_ly', 'tai_xe']);
-const allowedStatuses = new Set(['hoat_dong', 'khoa']);
+const allowedStatuses = new Set(['hoat_dong', 'bi_khoa']);
 const MAX_PHONE_LENGTH = 15;
+
+const normalizeStatus = (value) => {
+  // Backward-compatible alias for old frontend value.
+  if (value === 'khoa') return 'bi_khoa';
+  return value;
+};
 
 const normalizePhone = (value) => {
   if (value === undefined) return undefined;
@@ -80,7 +86,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const newStatus = trang_thai || 'hoat_dong';
+    const newStatus = normalizeStatus(trang_thai || 'hoat_dong');
     if (!allowedStatuses.has(newStatus)) {
       return res.status(400).json({
         success: false,
@@ -148,7 +154,7 @@ router.put('/:id', async (req, res) => {
     const current = existingRows[0];
     const normalizedPhone = normalizePhone(req.body.so_dien_thoai);
     const nextRole = req.body.vai_tro ?? current.vai_tro;
-    const nextStatus = req.body.trang_thai ?? current.trang_thai;
+    const nextStatus = normalizeStatus(req.body.trang_thai ?? current.trang_thai);
 
     if (!allowedRoles.has(nextRole)) {
       return res.status(400).json({ success: false, message: 'vai_tro khong hop le' });
@@ -220,18 +226,19 @@ router.patch('/:id/status', async (req, res) => {
   try {
     const userId = Number(req.params.id);
     const { trang_thai } = req.body;
+    const normalizedStatus = normalizeStatus(trang_thai);
 
     if (!Number.isFinite(userId) || userId <= 0) {
       return res.status(400).json({ success: false, message: 'id khong hop le' });
     }
 
-    if (!allowedStatuses.has(trang_thai)) {
+    if (!allowedStatuses.has(normalizedStatus)) {
       return res.status(400).json({ success: false, message: 'trang_thai khong hop le' });
     }
 
     const [result] = await pool.query(
       'UPDATE nguoi_dung SET trang_thai = ?, cap_nhat_luc = NOW() WHERE id = ?',
-      [trang_thai, userId]
+      [normalizedStatus, userId]
     );
 
     if (result.affectedRows === 0) {

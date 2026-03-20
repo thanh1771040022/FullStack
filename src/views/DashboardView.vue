@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { Icon } from '@iconify/vue'
 import { Bar } from 'vue-chartjs'
 import {
@@ -11,7 +11,7 @@ import {
   CategoryScale,
   LinearScale,
 } from 'chart.js'
-import { vehicleService, alertService, fuelService } from '@/services'
+import { vehicleService, alertService, fuelService, aiAgentService } from '@/services'
 
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale)
 
@@ -23,6 +23,24 @@ const fuelData = ref([])
 const loading = ref(true)
 const error = ref(null)
 const selectedYear = ref(new Date().getFullYear())
+
+const chatOpen = ref(false)
+const chatLoading = ref(false)
+const chatInput = ref('')
+const chatBodyRef = ref(null)
+const chatMessages = ref([
+  {
+    id: 1,
+    role: 'agent',
+    text: 'Chào bạn. Tôi là Fleet AI Agent. Hãy hỏi về nhiên liệu bất thường, định mức hoặc xe sắp hết hạn.',
+    createdAt: new Date().toISOString(),
+  },
+])
+const quickPrompts = [
+  'Xe nào nhiên liệu bất thường 30 ngày gần đây?',
+  'Top xe vượt định mức cao nhất trong tháng này?',
+  'Xe nào sắp hết hạn đăng kiểm trong 30 ngày tới?',
+]
 
 const maintenanceVehicleCount = computed(() => {
   const ids = new Set((upcomingExpiries.value || []).map((item) => item.xe_id).filter((id) => Number.isFinite(Number(id))))
@@ -290,8 +308,8 @@ const getAlertLevelClass = (level) => {
 }
 
 const getAlertTypeText = (type) => {
-  if (type === 'nhien_lieu_bat_thuong') return 'Nhien lieu bat thuong'
-  return 'Canh bao he thong'
+  if (type === 'nhien_lieu_bat_thuong') return 'Nhiên liệu bất thường'
+  return 'Cảnh báo hệ thống'
 }
 
 const getStatusClass = (status) => {
@@ -323,6 +341,114 @@ const getStatusText = (status) => {
 const getColorClass = (color) => {
   return `kpi-${color}`
 }
+
+const buildAgentText = (payload) => {
+  if (!payload) return 'Không nhận được dữ liệu từ AI Agent.'
+
+  const base = payload.answer || 'Đã xử lý xong yêu cầu.'
+  const items = Array.isArray(payload.items) ? payload.items : []
+
+  if (items.length === 0) return base
+
+  const lines = items.slice(0, 6).map((item, index) => {
+    if (payload.intent === 'deadline_alerts') {
+      return `${index + 1}. ${item.bien_so}: Đăng kiểm ${item.con_han_dang_kiem ?? 'N/A'} ngày, Bảo hiểm ${item.con_han_bao_hiem ?? 'N/A'} ngày, Lốp ${item.con_han_thay_lop ?? 'N/A'} ngày`
+    }
+
+    if (payload.intent === 'fuel_analysis') {
+      return `${index + 1}. ${item.bien_so}: tiêu hao ${item.muc_tieu_hao_thuc_te ?? 'N/A'}L/100km, vượt ${item.ty_le_vuot_dinh_muc ?? 0}%`
+    }
+
+    return `${index + 1}. ${item.bien_so}: tiêu hao ${item.muc_tieu_hao ?? 'N/A'}L/100km, vượt ${item.ty_le_vuot_dinh_muc ?? 0}%`
+  })
+
+  return `${base}\n\n${lines.join('\n')}`
+}
+
+const sendToAgent = async (questionText) => {
+  const question = (questionText || chatInput.value).trim()
+  if (!question || chatLoading.value) return
+
+  chatMessages.value.push({
+    id: Date.now(),
+    role: 'user',
+    text: question,
+    createdAt: new Date().toISOString(),
+  })
+
+  chatInput.value = ''
+  chatLoading.value = true
+
+  const toDate = new Date()
+  const fromDate = new Date()
+  fromDate.setDate(toDate.getDate() - 30)
+
+  try {
+    const response = await aiAgentService.ask({
+      question,
+      from: fromDate.toISOString().slice(0, 10),
+      to: toDate.toISOString().slice(0, 10),
+      days: 30,
+    })
+
+    chatMessages.value.push({
+      id: Date.now() + 1,
+      role: 'agent',
+      text: buildAgentText(response.data),
+      createdAt: new Date().toISOString(),
+    })
+  } catch (err) {
+    const message = err?.response?.data?.message || err.message || 'Lỗi không xác định'
+    chatMessages.value.push({
+      id: Date.now() + 1,
+      role: 'agent',
+      text: `Không thể lấy dữ liệu từ AI Agent: ${message}`,
+      createdAt: new Date().toISOString(),
+    })
+  } finally {
+    chatLoading.value = false
+  }
+}
+
+const scrollChatToBottom = async (smooth = true) => {
+  await nextTick()
+  if (!chatBodyRef.value) return
+
+  chatBodyRef.value.scrollTo({
+    top: chatBodyRef.value.scrollHeight,
+    behavior: smooth ? 'smooth' : 'auto',
+  })
+}
+
+const formatChatTime = (value) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  return date.toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+  })
+}
+
+watch(chatOpen, (isOpen) => {
+  if (isOpen) {
+    scrollChatToBottom(false)
+  }
+})
+
+watch(
+  () => chatMessages.value.length,
+  () => {
+    scrollChatToBottom(true)
+  }
+)
+
+watch(chatLoading, () => {
+  scrollChatToBottom(true)
+})
 </script>
 
 <template>
@@ -399,26 +525,26 @@ const getColorClass = (color) => {
 
     <div class="table-card alerts-card">
       <div class="card-header">
-        <h3>Canh bao gan day</h3>
+        <h3>Cảnh báo gần đây</h3>
         <RouterLink to="/alerts" class="link-view-all">
-          Xem tat ca
+          Xem tất cả
           <Icon icon="mdi:arrow-right" class="icon-sm" />
         </RouterLink>
       </div>
       <div v-if="recentFuelAlerts.length > 0" class="alerts-list">
         <div v-for="item in recentFuelAlerts" :key="item.id" class="alert-item" :class="getAlertLevelClass(item.muc_do)">
           <div class="alert-main">
-            <p class="alert-title">{{ item.tieu_de || 'Canh bao he thong' }}</p>
+            <p class="alert-title">{{ item.tieu_de || 'Cảnh báo hệ thống' }}</p>
             <p class="alert-meta">{{ getAlertTypeText(item.loai_canh_bao) }} - {{ formatDateTime(item.tao_luc) }}</p>
           </div>
-          <RouterLink to="/alerts" class="btn-icon" title="Xem canh bao">
+          <RouterLink to="/alerts" class="btn-icon" title="Xem cảnh báo">
             <Icon icon="mdi:open-in-new" class="icon-sm" />
           </RouterLink>
         </div>
       </div>
       <div v-else class="alerts-empty">
         <Icon icon="mdi:shield-check" class="icon-lg" />
-        <p>Chua co canh bao nao trong he thong.</p>
+        <p>Chưa có cảnh báo nào trong hệ thống.</p>
       </div>
     </div>
 
@@ -438,7 +564,7 @@ const getColorClass = (color) => {
               <th>Biển số xe</th>
               <th>Loại xe</th>
               <th>Loại bảo trì</th>
-                <th>Ngay het han</th>
+                <th>Ngày hết hạn</th>
               <th>Trạng thái</th>
               <th>Thao tác</th>
             </tr>
@@ -455,10 +581,10 @@ const getColorClass = (color) => {
                 </span>
               </td>
               <td>
-                <RouterLink to="/maintenance" class="btn-icon" title="Xem chi tiet">
+                <RouterLink to="/maintenance" class="btn-icon" title="Xem chi tiết">
                   <Icon icon="mdi:eye" class="icon-sm" />
                 </RouterLink>
-                <RouterLink to="/maintenance" class="btn-icon" title="Xu ly ngay">
+                <RouterLink to="/maintenance" class="btn-icon" title="Xử lý ngay">
                   <Icon icon="mdi:wrench" class="icon-sm" />
                 </RouterLink>
               </td>
@@ -467,6 +593,63 @@ const getColorClass = (color) => {
         </table>
       </div>
     </div>
+
+    <button class="ai-chat-fab" @click="chatOpen = !chatOpen">
+      <Icon :icon="chatOpen ? 'mdi:close' : 'mdi:robot-happy-outline'" class="icon-lg" />
+      <span>{{ chatOpen ? 'Đóng AI' : 'AI Agent' }}</span>
+    </button>
+
+    <section v-if="chatOpen" class="ai-chat-panel">
+      <div class="ai-chat-header">
+        <h3>
+          <Icon icon="mdi:robot-happy-outline" class="icon-sm" />
+          Trợ lý Fleet AI
+        </h3>
+      </div>
+
+      <div class="ai-chat-prompts">
+        <button
+          v-for="prompt in quickPrompts"
+          :key="prompt"
+          class="ai-prompt-btn"
+          @click="sendToAgent(prompt)"
+          :disabled="chatLoading"
+        >
+          {{ prompt }}
+        </button>
+      </div>
+
+      <div ref="chatBodyRef" class="ai-chat-body">
+        <article
+          v-for="msg in chatMessages"
+          :key="msg.id"
+          :class="['ai-message', msg.role === 'user' ? 'ai-message-user' : 'ai-message-agent']"
+        >
+          <p>{{ msg.text }}</p>
+          <time class="ai-message-time">{{ formatChatTime(msg.createdAt) }}</time>
+        </article>
+
+        <div v-if="chatLoading" class="ai-message ai-message-agent ai-message-loading">
+          <Icon icon="mdi:loading" class="loading-icon-inline" />
+          <span>AI đang phân tích dữ liệu...</span>
+        </div>
+      </div>
+
+      <div class="ai-chat-input-wrap">
+        <input
+          v-model="chatInput"
+          type="text"
+          class="ai-chat-input"
+          placeholder="Đặt câu hỏi cho AI Agent..."
+          :disabled="chatLoading"
+          @keyup.enter="sendToAgent()"
+        />
+        <button class="btn btn-primary" :disabled="chatLoading" @click="sendToAgent()">
+          <Icon icon="mdi:send" class="icon-sm" />
+          Gửi
+        </button>
+      </div>
+    </section>
     </template>
   </div>
 </template>
@@ -927,5 +1110,174 @@ tbody tr:hover {
 .btn-icon:hover {
   background: #FFF8E7;
   color: #F59E0B;
+}
+
+.ai-chat-fab {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 70;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: none;
+  border-radius: 9999px;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  color: #111827;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fde68a 0%, #fbbf24 100%);
+  box-shadow: 0 10px 25px rgba(245, 158, 11, 0.35);
+}
+
+.ai-chat-panel {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 5.25rem;
+  z-index: 70;
+  width: min(430px, calc(100vw - 2rem));
+  height: min(560px, calc(100vh - 8rem));
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  border-radius: 0.875rem;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-chat-header {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.ai-chat-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.95rem;
+  color: #92400e;
+}
+
+.ai-chat-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.ai-prompt-btn {
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  background: #fffdf7;
+  color: #92400e;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+}
+
+.ai-prompt-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ai-chat-body {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: #fafafa;
+}
+
+.ai-message {
+  max-width: 88%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.65rem;
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.ai-message p {
+  margin: 0;
+}
+
+.ai-message-time {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+.ai-message-user {
+  align-self: flex-end;
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+.ai-message-user .ai-message-time {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ai-message-agent {
+  align-self: flex-start;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #111827;
+}
+
+.ai-message-agent .ai-message-time {
+  color: #6b7280;
+}
+
+.ai-message-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.loading-icon-inline {
+  animation: spin 1s linear infinite;
+}
+
+.ai-chat-input-wrap {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-top: 1px solid #f3f4f6;
+  background: #ffffff;
+}
+
+.ai-chat-input {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.ai-chat-input:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+@media (max-width: 768px) {
+  .ai-chat-fab {
+    right: 1rem;
+    bottom: 1rem;
+  }
+
+  .ai-chat-panel {
+    right: 1rem;
+    bottom: 4.9rem;
+    width: calc(100vw - 2rem);
+    height: calc(100vh - 7rem);
+  }
 }
 </style>

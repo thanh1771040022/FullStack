@@ -16,6 +16,9 @@ const chuyenDiRoutes = require('./routes/chuyenDi.routes');
 const authRoutes = require('./routes/auth.routes');
 const userManagementRoutes = require('./routes/userManagement.routes');
 const authenticateToken = authRoutes.authenticateToken;
+const aiAgentRoutes = require('./routes/aiAgent.routes');
+const { startDeadlineAlertJob, stopDeadlineAlertJob } = require('./jobs/deadlineAlertJob');
+const scopeDriverData = require('./middleware/scopeDriverData');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,7 +26,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
@@ -48,17 +51,19 @@ app.use((req, res, next) => {
 
 // Test database connection
 testConnection();
+startDeadlineAlertJob();
 
 // API Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/xe', authenticateToken, xeRoutes);
+app.use('/api/xe', authenticateToken, scopeDriverData, xeRoutes);
 app.use('/api/tai-xe', authenticateToken, taiXeRoutes);
 app.use('/api/loai-xe', authenticateToken, requireRoles('quan_ly'), loaiXeRoutes);
 app.use('/api/bao-tri', authenticateToken, baoTriRoutes);
 app.use('/api/loai-bao-tri', authenticateToken, requireRoles('quan_ly'), loaiBaoTriRoutes);
-app.use('/api/canh-bao', authenticateToken, canhBaoRoutes);
-app.use('/api/do-nhien-lieu', authenticateToken, doNhienLieuRoutes);
-app.use('/api/chuyen-di', authenticateToken, chuyenDiRoutes);
+app.use('/api/canh-bao', authenticateToken, scopeDriverData, canhBaoRoutes);
+app.use('/api/do-nhien-lieu', authenticateToken, scopeDriverData, doNhienLieuRoutes);
+app.use('/api/chuyen-di', authenticateToken, scopeDriverData, chuyenDiRoutes);
+app.use('/api/ai-agent', authenticateToken, aiAgentRoutes);
 app.use('/api/users', authenticateToken, requireRoles('quan_ly'), userManagementRoutes);
 
 // Health check endpoint
@@ -107,3 +112,14 @@ server.on('listening', () => {
   const addr = server.address();
   console.log(`✅ Server listening on ${addr.address}:${addr.port}`);
 });
+
+const shutdown = (signal) => {
+  console.log(`\n🛑 Nhận tín hiệu ${signal}, đang dừng server...`);
+  stopDeadlineAlertJob();
+  server.close(() => {
+    process.exit(0);
+  });
+};
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

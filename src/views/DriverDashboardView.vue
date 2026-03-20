@@ -1,9 +1,10 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { authService } from '@/services/authService'
 import { alertService, fuelService, maintenanceService, tripService, vehicleService, driverService } from '@/services'
+import { aiAgentService } from '@/services/aiAgentService'
 
 const router = useRouter()
 const user = ref(authService.getUser())
@@ -40,6 +41,26 @@ const savingFuel = ref(false)
 const savingIssue = ref(false)
 const savingChecklist = ref(false)
 
+const chatOpen = ref(false)
+const chatLoading = ref(false)
+const chatInput = ref('')
+const chatBodyRef = ref(null)
+const chatMessages = ref([
+  {
+    id: 1,
+    role: 'agent',
+    text: 'Fleet AI Driver sẵn sàng. Bạn có thể dùng quick action để xem tổng quan hôm nay, cảnh báo ưu tiên, nhiên liệu tháng này hoặc checklist trước chuyến.',
+    createdAt: new Date().toISOString(),
+  },
+])
+
+const driverQuickActions = [
+  { label: 'Tổng quan hôm nay', intent: 'driver_today_summary', question: 'Tổng quan hôm nay của tôi' },
+  { label: 'Cảnh báo ưu tiên', intent: 'driver_priority_alerts', question: 'Các cảnh báo ưu tiên cần xử lý' },
+  { label: 'Nhiên liệu tháng này', intent: 'driver_fuel_month', question: 'Tình hình nhiên liệu tháng này' },
+  { label: 'Checklist trước chuyến', intent: 'driver_pretrip_checklist', question: 'Checklist trước chuyến cho tôi' },
+]
+
 const driverId = ref(null)
 
 // Fetch driver data
@@ -54,11 +75,10 @@ const fetchDriverData = async () => {
         const driversRes = await driverService.getAll()
         const drivers = driversRes.data || []
 
-        // Tìm tài xế có email hoặc sdt trùng với user
+        // Tìm tài xế có email hoặc sdt trùng với user (tránh map theo họ tên vì dễ trùng)
         const matchedDriver = drivers.find(d =>
           (user.value?.email && d.email === user.value.email) ||
-          (user.value?.so_dien_thoai && d.so_dien_thoai === user.value.so_dien_thoai) ||
-          (user.value?.ho_ten && d.ho_ten === user.value.ho_ten)
+          (user.value?.so_dien_thoai && d.so_dien_thoai === user.value.so_dien_thoai)
         )
 
         if (matchedDriver) {
@@ -66,7 +86,7 @@ const fetchDriverData = async () => {
           driverInfo.value = matchedDriver
         }
       } catch (error) {
-        console.warn('Khong the tai danh sach tai xe de mapping:', error?.response?.data?.message || error?.message)
+        console.warn('Không thể tải danh sách tài xế để mapping:', error?.response?.data?.message || error?.message)
       }
     }
     
@@ -80,7 +100,7 @@ const fetchDriverData = async () => {
           const driverRes = await driverService.getById(currentDriverId)
           driverInfo.value = driverRes.data
         } catch (error) {
-          console.warn('Khong the tai ho so tai xe:', error?.response?.data?.message || error?.message)
+          console.warn('Không thể tải hồ sơ tài xế:', error?.response?.data?.message || error?.message)
         }
       }
       
@@ -191,13 +211,19 @@ const monthMetrics = computed(() => {
   }
 })
 
+const activeTrip = computed(() => {
+  const inProgress = recentTrips.value.find((t) => String(t.trang_thai || '').toLowerCase() === 'dang_di')
+  if (inProgress) return inProgress
+  return recentTrips.value[0] || null
+})
+
 const unreadAlerts = computed(() => personalAlerts.value.filter((a) => !a.da_doc))
 
 const recentActivities = computed(() => {
   const fuelItems = fuelRecords.value.slice(0, 5).map((f) => ({
     id: `fuel-${f.id}`,
     type: 'fuel',
-    title: `Do nhien lieu ${Number(f.so_lit || 0).toFixed(1)} L`,
+    title: `Đổ nhiên liệu ${Number(f.so_lit || 0).toFixed(1)} L`,
     meta: `${formatNumber(f.quang_duong || 0)} km - ${formatCurrency(f.tong_tien || 0)}`,
     date: f.thoi_gian_do,
     status: f.bat_thuong ? 'warning' : 'ok',
@@ -215,7 +241,7 @@ const recentActivities = computed(() => {
   const maintenanceItems = maintenanceRecords.value.slice(0, 5).map((m) => ({
     id: `maintenance-${m.id}`,
     type: 'maintenance',
-    title: `Bao tri: ${m.loai_bao_tri_ten || 'Bao tri'}`,
+    title: `Bảo trì: ${m.loai_bao_tri_ten || 'Bảo trì'}`,
     meta: `${formatCurrency(m.tong_chi_phi || 0)}`,
     date: m.ngay_du_kien || m.tao_luc,
     status: m.trang_thai === 'qua_han' ? 'warning' : 'ok',
@@ -231,23 +257,70 @@ const checklistSavedToday = computed(() => {
   return personalAlerts.value.some((a) =>
     a.loai_canh_bao === 'he_thong' &&
     typeof a.tieu_de === 'string' &&
-    a.tieu_de.includes(`Kiem tra truoc chuyen ${today}`)
+    (a.tieu_de.includes(`Kiểm tra trước chuyến ${today}`) || a.tieu_de.includes(`Kiem tra truoc chuyen ${today}`))
   )
 })
 
+const toMySqlDateTimeNow = () => {
+  const date = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+const toSafeNumber = (value) => {
+  if (value === null || value === undefined) return NaN
+  if (typeof value === 'number') return Number.isFinite(value) ? value : NaN
+
+  const raw = String(value).trim().replace(/\s+/g, '')
+  if (!raw) return NaN
+
+  let normalized = raw
+
+  // 165.800,00 -> 165800.00
+  if (/^-?\d{1,3}(\.\d{3})+,\d+$/.test(normalized)) {
+    normalized = normalized.replace(/\./g, '').replace(',', '.')
+  // 165,800.00 -> 165800.00
+  } else if (/^-?\d{1,3}(,\d{3})+\.\d+$/.test(normalized)) {
+    normalized = normalized.replace(/,/g, '')
+  // 165800,00 -> 165800.00
+  } else if (normalized.includes(',') && !normalized.includes('.')) {
+    normalized = normalized.replace(',', '.')
+  }
+
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : NaN
+}
+
 const submitFuelRecord = async () => {
   if (!assignedVehicle.value || !driverId.value) {
-    alert('Ban chua duoc gan xe hoac tai khoan tai xe khong hop le.')
+    alert('Bạn chưa được gán xe hoặc tài khoản tài xế không hợp lệ.')
     return
   }
 
-  const soLit = Number(fuelForm.value.so_lit)
-  const giaMoiLit = Number(fuelForm.value.gia_moi_lit)
-  const kmTruoc = Number(assignedVehicle.value.so_km_hien_tai || 0)
-  const kmSau = Number(fuelForm.value.km_sau)
+  const soLit = toSafeNumber(fuelForm.value.so_lit)
+  const giaMoiLit = toSafeNumber(fuelForm.value.gia_moi_lit)
+  const kmTruoc = toSafeNumber(assignedVehicle.value.so_km_hien_tai || 0)
+  const kmSau = toSafeNumber(fuelForm.value.km_sau)
 
-  if (!Number.isFinite(soLit) || !Number.isFinite(giaMoiLit) || !Number.isFinite(kmSau)) {
-    alert('Vui long nhap du thong tin do nhien lieu hop le.')
+  const validationErrors = []
+  if (!Number.isFinite(soLit) || soLit <= 0) {
+    validationErrors.push('Số lít phải lớn hơn 0.')
+  }
+  if (!Number.isFinite(giaMoiLit) || giaMoiLit <= 0) {
+    validationErrors.push('Giá mỗi lít phải lớn hơn 0.')
+  }
+  if (!Number.isFinite(kmTruoc)) {
+    validationErrors.push('KM trước không hợp lệ, vui lòng kiểm tra xe được gán.')
+  }
+  if (!Number.isFinite(kmSau)) {
+    validationErrors.push('KM sau không hợp lệ.')
+  }
+  if (Number.isFinite(kmTruoc) && Number.isFinite(kmSau) && kmSau <= kmTruoc) {
+    validationErrors.push('KM sau phải lớn hơn KM trước.')
+  }
+
+  if (validationErrors.length > 0) {
+    alert(`Dữ liệu không hợp lệ:\n- ${validationErrors.join('\n- ')}`)
     return
   }
 
@@ -256,7 +329,7 @@ const submitFuelRecord = async () => {
     await fuelService.create({
       xe_id: assignedVehicle.value.id,
       tai_xe_id: driverId.value,
-      thoi_gian_do: new Date().toISOString(),
+      thoi_gian_do: toMySqlDateTimeNow(),
       tram_xang: fuelForm.value.tram_xang || null,
       loai_nhien_lieu: 'dau_diesel',
       so_lit: soLit,
@@ -266,11 +339,16 @@ const submitFuelRecord = async () => {
       ghi_chu: fuelForm.value.ghi_chu || null,
     })
 
-    alert('Da ghi nhan do nhien lieu thanh cong.')
+    alert('Đã ghi nhận đổ nhiên liệu thành công.')
     await fetchDriverData()
   } catch (err) {
-    const message = err?.response?.data?.message || err?.message || 'Khong the ghi nhan do nhien lieu.'
-    alert(message)
+    const baseMessage = err?.response?.data?.message || err?.message || 'Không thể ghi nhận đổ nhiên liệu.'
+    const details = err?.response?.data?.details
+    if (Array.isArray(details) && details.length > 0) {
+      alert(`${baseMessage}\n- ${details.join('\n- ')}`)
+    } else {
+      alert(baseMessage)
+    }
   } finally {
     savingFuel.value = false
   }
@@ -278,12 +356,12 @@ const submitFuelRecord = async () => {
 
 const submitIssueReport = async () => {
   if (!assignedVehicle.value || !driverId.value) {
-    alert('Ban chua duoc gan xe hoac tai khoan tai xe khong hop le.')
+    alert('Bạn chưa được gán xe hoặc tài khoản tài xế không hợp lệ.')
     return
   }
 
   if (!issueForm.value.tieu_de.trim() || !issueForm.value.noi_dung.trim()) {
-    alert('Vui long nhap tieu de va noi dung su co.')
+    alert('Vui lòng nhập tiêu đề và nội dung sự cố.')
     return
   }
 
@@ -303,10 +381,10 @@ const submitIssueReport = async () => {
     issueForm.value.noi_dung = ''
     issueForm.value.muc_do = 'trung_binh'
 
-    alert('Da gui bao cao su co thanh cong.')
+    alert('Đã gửi báo cáo sự cố thành công.')
     await fetchDriverData()
   } catch (err) {
-    const message = err?.response?.data?.message || err?.message || 'Khong the gui bao cao su co.'
+    const message = err?.response?.data?.message || err?.message || 'Không thể gửi báo cáo sự cố.'
     alert(message)
   } finally {
     savingIssue.value = false
@@ -315,7 +393,7 @@ const submitIssueReport = async () => {
 
 const savePreTripChecklist = async () => {
   if (!assignedVehicle.value || !driverId.value) {
-    alert('Ban chua duoc gan xe hoac tai khoan tai xe khong hop le.')
+    alert('Bạn chưa được gán xe hoặc tài khoản tài xế không hợp lệ.')
     return
   }
 
@@ -331,15 +409,15 @@ const savePreTripChecklist = async () => {
       tai_xe_id: driverId.value,
       loai_canh_bao: 'he_thong',
       muc_do: 'thap',
-      tieu_de: `Kiem tra truoc chuyen ${today}`,
-      noi_dung: `Da kiem tra: ${checkedItems.join(', ') || 'khong co muc nao duoc tick'}`,
+      tieu_de: `Kiểm tra trước chuyến ${today}`,
+      noi_dung: `Đã kiểm tra: ${checkedItems.join(', ') || 'không có mục nào được tick'}`,
       da_doc: 0,
     })
 
-    alert('Da luu checklist truoc chuyen vao he thong.')
+    alert('Đã lưu checklist trước chuyến vào hệ thống.')
     await fetchDriverData()
   } catch (err) {
-    const message = err?.response?.data?.message || err?.message || 'Khong the luu checklist.'
+    const message = err?.response?.data?.message || err?.message || 'Không thể lưu checklist.'
     alert(message)
   } finally {
     savingChecklist.value = false
@@ -387,6 +465,215 @@ const getActivityClass = (status) => {
   if (status === 'progress') return 'activity-progress'
   return 'activity-ok'
 }
+
+const formatDateTime = (value) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+  })
+}
+
+const safeDaysLeft = (value) => {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+
+  const today = new Date()
+  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const startTarget = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diff = Math.floor((startTarget.getTime() - startToday.getTime()) / (24 * 60 * 60 * 1000))
+  return Number.isFinite(diff) ? diff : null
+}
+
+const buildDriverContext = () => {
+  const vehicle = assignedVehicle.value
+  const trip = activeTrip.value
+
+  return {
+    vehicle: vehicle
+      ? {
+          bien_so: vehicle.bien_so,
+          trang_thai: vehicle.trang_thai,
+          con_han_dang_kiem: safeDaysLeft(vehicle.han_dang_kiem),
+          con_han_bao_hiem: safeDaysLeft(vehicle.han_bao_hiem),
+          con_han_thay_lop: safeDaysLeft(vehicle.ngay_thay_lop),
+        }
+      : null,
+    trip: trip
+      ? {
+          trang_thai: trip.trang_thai,
+          diem_di: trip.diem_di,
+          diem_den: trip.diem_den,
+          khoang_cach: Number(trip.khoang_cach_thuc_te || 0),
+        }
+      : null,
+    monthMetrics: {
+      totalKm: Number(monthMetrics.value.totalKm || 0),
+      totalRefuels: Number(monthMetrics.value.totalRefuels || 0),
+      avgConsumption: Number(monthMetrics.value.avgConsumption || 0),
+      avgVariance: Number(monthMetrics.value.avgVariance || 0),
+      status: monthMetrics.value.status,
+    },
+    alerts: {
+      unread: Number(unreadAlerts.value.length || 0),
+      total: Number(personalAlerts.value.length || 0),
+    },
+  }
+}
+
+const buildDriverPromptTemplate = (question, intent, context) => {
+  const lines = []
+
+  lines.push(`YEU_CAU: ${question}`)
+  lines.push(`INTENT_UU_TIEN: ${intent || 'auto'}`)
+
+  if (context.vehicle) {
+    lines.push(
+      `XE_HIEN_TAI: bien_so=${context.vehicle.bien_so || 'N/A'}; trang_thai=${context.vehicle.trang_thai || 'N/A'}; ` +
+      `dang_kiem=${context.vehicle.con_han_dang_kiem ?? 'N/A'}; bao_hiem=${context.vehicle.con_han_bao_hiem ?? 'N/A'}; thay_lop=${context.vehicle.con_han_thay_lop ?? 'N/A'}`
+    )
+  } else {
+    lines.push('XE_HIEN_TAI: chua_duoc_gan')
+  }
+
+  if (context.trip) {
+    lines.push(
+      `CHUYEN_GAN_NHAT: trang_thai=${context.trip.trang_thai || 'N/A'}; tuyen=${context.trip.diem_di || 'N/A'}->${context.trip.diem_den || 'N/A'}; km=${context.trip.khoang_cach || 0}`
+    )
+  } else {
+    lines.push('CHUYEN_GAN_NHAT: khong_co_du_lieu')
+  }
+
+  lines.push(
+    `NHIEU_LIEU_THANG: km=${context.monthMetrics.totalKm}; lan_do=${context.monthMetrics.totalRefuels}; ` +
+    `tieu_hao_tb=${context.monthMetrics.avgConsumption.toFixed(2)}; vuot_tb=${context.monthMetrics.avgVariance.toFixed(2)}; status=${context.monthMetrics.status}`
+  )
+  lines.push(`CANH_BAO: unread=${context.alerts.unread}; total=${context.alerts.total}`)
+
+  return lines.join('\n')
+}
+
+const buildDriverAgentText = (payload) => {
+  if (!payload) return 'Không nhận được dữ liệu từ Fleet AI Driver.'
+
+  const base = payload.answer || 'Đã xử lý yêu cầu.'
+  const intent = payload.intent
+
+  if (intent === 'driver_today_summary') {
+    const s = payload.summary || {}
+    return `${base}\n\n- Chuyến hôm nay: ${s.tong_chuyen_hom_nay || 0}\n- Đổ nhiên liệu: ${s.so_lan_do_hom_nay || 0} lần (${s.tong_lit_hom_nay || 0} L)\n- Cảnh báo chưa đọc: ${s.canh_bao_chua_doc || 0}`
+  }
+
+  if (intent === 'driver_priority_alerts') {
+    const items = Array.isArray(payload.items) ? payload.items : []
+    if (items.length === 0) return `${base}\n\nKhông có cảnh báo ưu tiên mới.`
+    const lines = items.slice(0, 6).map((item, index) => `${index + 1}. [${item.muc_do || 'thap'}] ${item.tieu_de || 'Canh bao'} (${item.bien_so || 'N/A'})`)
+    return `${base}\n\n${lines.join('\n')}`
+  }
+
+  if (intent === 'driver_fuel_month') {
+    const s = payload.summary || {}
+    const items = Array.isArray(payload.items) ? payload.items : []
+    const head = [
+      `- Tổng lần đổ: ${s.so_lan_do || 0}`,
+      `- Tổng lít: ${s.tong_lit || 0} L`,
+      `- Tổng chi phí: ${formatCurrency(s.tong_chi_phi || 0)}`,
+      `- Tiêu hao TB: ${s.tieu_hao_tb || 0} L/100km`,
+    ].join('\n')
+
+    if (items.length === 0) return `${base}\n\n${head}`
+    const lines = items.slice(0, 4).map((item, idx) => `${idx + 1}. ${formatDate(item.thoi_gian_do)} - ${item.bien_so || 'N/A'} - ${Number(item.so_lit || 0).toFixed(1)} L`)
+    return `${base}\n\n${head}\n\nGần nhất:\n${lines.join('\n')}`
+  }
+
+  const notes = Array.isArray(payload.notes) ? payload.notes : []
+  const items = Array.isArray(payload.items) ? payload.items : []
+  const checklist = items.map((line, idx) => `${idx + 1}. ${line}`).join('\n')
+  const hint = notes.length > 0 ? `\n\nLưu ý:\n${notes.slice(0, 4).map((line) => `- ${line}`).join('\n')}` : ''
+  return `${base}\n\nChecklist:\n${checklist || '- Chua co du lieu'}${hint}`
+}
+
+const scrollChatToBottom = async (smooth = true) => {
+  await nextTick()
+  if (!chatBodyRef.value) return
+  chatBodyRef.value.scrollTo({
+    top: chatBodyRef.value.scrollHeight,
+    behavior: smooth ? 'smooth' : 'auto',
+  })
+}
+
+const askDriverAgent = async (questionText, forcedIntent = null) => {
+  const question = (questionText || chatInput.value).trim()
+  if (!question || chatLoading.value) return
+
+  const clientContext = buildDriverContext()
+  const templatedQuestion = buildDriverPromptTemplate(question, forcedIntent, clientContext)
+
+  chatMessages.value.push({
+    id: Date.now(),
+    role: 'user',
+    text: question,
+    createdAt: new Date().toISOString(),
+  })
+
+  chatInput.value = ''
+  chatLoading.value = true
+
+  const toDate = new Date()
+  const fromDate = new Date()
+  fromDate.setDate(toDate.getDate() - 30)
+
+  try {
+    const response = await aiAgentService.ask({
+      question: templatedQuestion,
+      intent: forcedIntent,
+      user_question: question,
+      client_context: clientContext,
+      from: fromDate.toISOString().slice(0, 10),
+      to: toDate.toISOString().slice(0, 10),
+      days: 30,
+    })
+
+    chatMessages.value.push({
+      id: Date.now() + 1,
+      role: 'agent',
+      text: buildDriverAgentText(response?.data),
+      createdAt: new Date().toISOString(),
+    })
+  } catch (err) {
+    const message = err?.response?.data?.message || err?.message || 'Lỗi không xác định'
+    chatMessages.value.push({
+      id: Date.now() + 1,
+      role: 'agent',
+      text: `Không thể lấy dữ liệu từ Fleet AI Driver: ${message}`,
+      createdAt: new Date().toISOString(),
+    })
+  } finally {
+    chatLoading.value = false
+  }
+}
+
+watch(chatOpen, (isOpen) => {
+  if (isOpen) {
+    scrollChatToBottom(false)
+  }
+})
+
+watch(
+  () => chatMessages.value.length,
+  () => {
+    scrollChatToBottom(true)
+  }
+)
+
+watch(chatLoading, () => {
+  scrollChatToBottom(true)
+})
 
 onMounted(() => {
   fetchDriverData()
@@ -469,7 +756,7 @@ onMounted(() => {
               </div>
               <button class="btn-primary-action" :disabled="savingFuel" @click="submitFuelRecord">
                 <Icon icon="mdi:content-save" />
-                {{ savingFuel ? 'Dang luu...' : 'Ghi nhận đổ nhiên liệu' }}
+                {{ savingFuel ? 'Đang lưu...' : 'Ghi nhận đổ nhiên liệu' }}
               </button>
             </div>
           </div>
@@ -482,24 +769,24 @@ onMounted(() => {
             <div class="card-body action-form">
               <div class="form-row">
                 <label>Tiêu đề sự cố</label>
-                <input v-model="issueForm.tieu_de" type="text" placeholder="VD: Xe hao nhien lieu bat thuong" />
+                <input v-model="issueForm.tieu_de" type="text" placeholder="VD: Xe hao nhiên liệu bất thường" />
               </div>
               <div class="form-row">
                 <label>Mức độ</label>
                 <select v-model="issueForm.muc_do">
-                  <option value="thap">Thap</option>
-                  <option value="trung_binh">Trung binh</option>
+                  <option value="thap">Thấp</option>
+                  <option value="trung_binh">Trung bình</option>
                   <option value="cao">Cao</option>
-                  <option value="nghiem_trong">Nghiem trong</option>
+                  <option value="nghiem_trong">Nghiêm trọng</option>
                 </select>
               </div>
               <div class="form-row">
                 <label>Nội dung</label>
-                <textarea v-model="issueForm.noi_dung" rows="4" placeholder="Mo ta tinh trang su co..."></textarea>
+                <textarea v-model="issueForm.noi_dung" rows="4" placeholder="Mô tả tình trạng sự cố..."></textarea>
               </div>
               <button class="btn-danger-action" :disabled="savingIssue" @click="submitIssueReport">
                 <Icon icon="mdi:send" />
-                {{ savingIssue ? 'Dang gui...' : 'Báo sự cố xe' }}
+                {{ savingIssue ? 'Đang gửi...' : 'Báo sự cố xe' }}
               </button>
             </div>
           </div>
@@ -533,7 +820,7 @@ onMounted(() => {
             <div class="stat-content">
               <h3>Tiêu hao TB tháng</h3>
               <p class="stat-value">{{ monthMetrics.avgConsumption.toFixed(2) }} L/100km</p>
-              <p class="stat-sub">Du lieu thuc te DB</p>
+              <p class="stat-sub">Dữ liệu thực tế DB</p>
             </div>
           </div>
           <div class="stat-card">
@@ -541,11 +828,11 @@ onMounted(() => {
               <Icon icon="mdi:chart-line" />
             </div>
             <div class="stat-content">
-              <h3>So voi dinh muc</h3>
+              <h3>So với định mức</h3>
               <p class="stat-value" :class="monthMetrics.status === 'warning' ? 'bao_duong' : 'hoat_dong'">
-                {{ monthMetrics.status === 'warning' ? 'Canh bao' : 'Binh thuong' }}
+                {{ monthMetrics.status === 'warning' ? 'Cảnh báo' : 'Bình thường' }}
               </p>
-              <p class="stat-sub">Ty le vuot TB: {{ monthMetrics.avgVariance.toFixed(2) }}%</p>
+              <p class="stat-sub">Tỷ lệ vượt TB: {{ monthMetrics.avgVariance.toFixed(2) }}%</p>
             </div>
           </div>
         </div>
@@ -723,14 +1010,14 @@ onMounted(() => {
             <div class="card-header">
               <Icon icon="mdi:bell-alert" />
               <h2>Cảnh báo cá nhân</h2>
-              <span class="alerts-badge">{{ unreadAlerts.length }} chua doc</span>
+              <span class="alerts-badge">{{ unreadAlerts.length }} chưa đọc</span>
             </div>
             <div class="card-body">
               <div v-if="personalAlerts.length > 0" class="alerts-list">
                 <div v-for="alert in personalAlerts" :key="alert.id" class="alert-item" :class="getAlertSeverityClass(alert.muc_do)">
                   <div class="alert-main">
-                    <p class="alert-title">{{ alert.tieu_de || 'Canh bao he thong' }}</p>
-                    <p class="alert-content">{{ alert.noi_dung || 'Khong co noi dung chi tiet' }}</p>
+                    <p class="alert-title">{{ alert.tieu_de || 'Cảnh báo hệ thống' }}</p>
+                    <p class="alert-content">{{ alert.noi_dung || 'Không có nội dung chi tiết' }}</p>
                   </div>
                   <div class="alert-meta">
                     <span class="alert-time">{{ formatDate(alert.tao_luc) }}</span>
@@ -740,7 +1027,7 @@ onMounted(() => {
               </div>
               <div v-else class="empty-state">
                 <Icon icon="mdi:bell-off" />
-                <p>Chua co canh bao nao</p>
+                <p>Chưa có cảnh báo nào</p>
               </div>
             </div>
           </div>
@@ -748,19 +1035,19 @@ onMounted(() => {
           <div class="content-card checklist-card">
             <div class="card-header">
               <Icon icon="mdi:clipboard-check" />
-              <h2>Kiem tra nhanh truoc chuyen</h2>
+              <h2>Kiểm tra nhanh trước chuyến</h2>
             </div>
             <div class="card-body">
-              <label class="check-item"><input type="checkbox" v-model="preTripChecks.lop" /> Kiem tra lop xe</label>
-              <label class="check-item"><input type="checkbox" v-model="preTripChecks.den" /> Kiem tra den</label>
-              <label class="check-item"><input type="checkbox" v-model="preTripChecks.phanh" /> Kiem tra phanh</label>
-              <label class="check-item"><input type="checkbox" v-model="preTripChecks.dau" /> Kiem tra dau may</label>
+              <label class="check-item"><input type="checkbox" v-model="preTripChecks.lop" /> Kiểm tra lốp xe</label>
+              <label class="check-item"><input type="checkbox" v-model="preTripChecks.den" /> Kiểm tra đèn</label>
+              <label class="check-item"><input type="checkbox" v-model="preTripChecks.phanh" /> Kiểm tra phanh</label>
+              <label class="check-item"><input type="checkbox" v-model="preTripChecks.dau" /> Kiểm tra dầu máy</label>
 
               <button class="btn-primary-action" :disabled="savingChecklist" @click="savePreTripChecklist">
                 <Icon icon="mdi:content-save-check" />
-                {{ savingChecklist ? 'Dang luu...' : 'Luu checklist hom nay' }}
+                {{ savingChecklist ? 'Đang lưu...' : 'Lưu checklist hôm nay' }}
               </button>
-              <p class="checklist-note" v-if="checklistSavedToday">Ban da luu checklist trong ngay hom nay.</p>
+              <p class="checklist-note" v-if="checklistSavedToday">Bạn đã lưu checklist trong ngày hôm nay.</p>
             </div>
           </div>
         </div>
@@ -785,14 +1072,67 @@ onMounted(() => {
                   </p>
                 </div>
                 <div class="activity-status" :class="getActivityClass(activity.status)">
-                  {{ activity.status === 'warning' ? 'Canh bao' : activity.status === 'progress' ? 'Dang xu ly' : 'Hoan tat' }}
+                  {{ activity.status === 'warning' ? 'Cảnh báo' : activity.status === 'progress' ? 'Đang xử lý' : 'Hoàn tất' }}
                 </div>
               </div>
             </div>
             <div v-else class="empty-state">
               <Icon icon="mdi:calendar-blank" />
-              <p>Chua co hoat dong nao</p>
+              <p>Chưa có hoạt động nào</p>
             </div>
+          </div>
+        </div>
+
+        <button class="driver-ai-fab" @click="chatOpen = !chatOpen">
+          <Icon :icon="chatOpen ? 'mdi:close' : 'mdi:robot-happy-outline'" />
+          <span>{{ chatOpen ? 'Đóng AI' : 'Fleet AI Driver' }}</span>
+        </button>
+
+        <div v-if="chatOpen" class="driver-ai-panel">
+          <div class="driver-ai-header">
+            <div>
+              <h3>Fleet AI Driver</h3>
+              <p>Trợ lý theo dữ liệu tài xế của bạn</p>
+            </div>
+            <button class="driver-ai-close" @click="chatOpen = false">
+              <Icon icon="mdi:close" />
+            </button>
+          </div>
+
+          <div class="driver-ai-quick-actions">
+            <button
+              v-for="qa in driverQuickActions"
+              :key="qa.intent"
+              class="driver-ai-quick-btn"
+              :disabled="chatLoading"
+              @click="askDriverAgent(qa.question, qa.intent)"
+            >
+              {{ qa.label }}
+            </button>
+          </div>
+
+          <div ref="chatBodyRef" class="driver-ai-body">
+            <div v-for="message in chatMessages" :key="message.id" class="driver-ai-msg" :class="message.role">
+              <p>{{ message.text }}</p>
+              <span>{{ formatDateTime(message.createdAt) }}</span>
+            </div>
+            <div v-if="chatLoading" class="driver-ai-msg agent loading">
+              <p>Đang phân tích dữ liệu...</p>
+            </div>
+          </div>
+
+          <div class="driver-ai-input-wrap">
+            <input
+              v-model="chatInput"
+              type="text"
+              class="driver-ai-input"
+              placeholder="Nhập câu hỏi cho Fleet AI Driver"
+              :disabled="chatLoading"
+              @keydown.enter="askDriverAgent()"
+            />
+            <button class="driver-ai-send" :disabled="chatLoading || !chatInput.trim()" @click="askDriverAgent()">
+              <Icon icon="mdi:send" />
+            </button>
           </div>
         </div>
       </template>
@@ -1431,6 +1771,186 @@ onMounted(() => {
 
   .action-form .form-row.two-col {
     grid-template-columns: 1fr;
+  }
+}
+
+.driver-ai-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1100;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  box-shadow: 0 10px 28px rgba(37, 99, 235, 0.35);
+}
+
+.driver-ai-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 88px;
+  width: min(420px, calc(100vw - 24px));
+  max-height: 70vh;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  z-index: 1099;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+
+.driver-ai-header {
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #eff6ff, #e0f2fe);
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.driver-ai-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.driver-ai-header p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.driver-ai-close {
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+.driver-ai-quick-actions {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.driver-ai-quick-btn {
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.driver-ai-quick-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.driver-ai-body {
+  padding: 12px;
+  overflow: auto;
+  min-height: 220px;
+  max-height: 42vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.driver-ai-msg {
+  max-width: 88%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  white-space: pre-wrap;
+}
+
+.driver-ai-msg p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.driver-ai-msg span {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.driver-ai-msg.user {
+  align-self: flex-end;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.driver-ai-msg.agent {
+  align-self: flex-start;
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+}
+
+.driver-ai-msg.loading {
+  font-style: italic;
+}
+
+.driver-ai-input-wrap {
+  padding: 10px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 8px;
+}
+
+.driver-ai-input {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 13px;
+}
+
+.driver-ai-send {
+  border: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  color: #fff;
+  cursor: pointer;
+}
+
+.driver-ai-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .driver-ai-fab {
+    right: 14px;
+    bottom: 14px;
+  }
+
+  .driver-ai-panel {
+    right: 10px;
+    bottom: 68px;
+    width: calc(100vw - 20px);
+    max-height: 76vh;
   }
 }
 </style>

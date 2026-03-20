@@ -203,10 +203,16 @@ const openEditModal = (vehicle) => {
 const handleSaveMaintenance = async (data) => {
   console.log('Saving maintenance data:', data)
   try {
+    const resolvedVehicleId = resolveVehicleId(data)
+    if (!resolvedVehicleId) {
+      alert('Không tìm thấy xe tương ứng để lưu lịch bảo trì. Vui lòng chọn lại xe!')
+      return
+    }
+
     if (data.mode === 'add') {
       // Create maintenance record via API
       const payload = {
-        xe_id: data.vehicleId,
+        xe_id: resolvedVehicleId,
         loai_bao_tri_id: getMaintenanceTypeId(data.maintenanceType),
         ngay_du_kien: data.scheduledDate,
         tong_chi_phi: data.estimatedCost || 0,
@@ -227,14 +233,14 @@ const handleSaveMaintenance = async (data) => {
       }
       
       if (Object.keys(vehicleUpdatePayload).length > 0) {
-        await vehicleService.update(data.vehicleId, vehicleUpdatePayload)
+        await vehicleService.update(resolvedVehicleId, vehicleUpdatePayload)
       }
       
       alert('Thêm lịch bảo trì thành công!')
       fetchMaintenanceData()
     } else {
       // Update vehicle dates directly in xe table
-      const vehicleId = data.vehicleId || selectedMaintenance.value.id
+      const vehicleId = resolvedVehicleId || selectedMaintenance.value.id
       const vehicleUpdatePayload = {}
       
       // Update based on maintenance type selected
@@ -281,17 +287,67 @@ const openDeleteModal = (vehicle) => {
   showDeleteModal.value = true
 }
 
+const resolveVehicleId = (data) => {
+  if (data.vehicleId) return Number(data.vehicleId)
+
+  const inputPlate = String(data.licensePlate || '').trim().toLowerCase()
+  if (!inputPlate) return null
+
+  const matched = vehiclesList.value.find(
+    (v) => String(v.licensePlate || '').trim().toLowerCase() === inputPlate
+  )
+  return matched ? Number(matched.id) : null
+}
+
+const exportMaintenanceReport = () => {
+  if (!filteredVehicles.value.length) {
+    alert('Không có dữ liệu để xuất báo cáo!')
+    return
+  }
+
+  const headers = ['Biển số', 'Xe', 'Hạn đăng kiểm', 'Hạn bảo hiểm', 'Hạn thay lốp']
+  const rows = filteredVehicles.value.map((v) => [
+    v.licensePlate,
+    `${v.brand} ${v.model}`.trim(),
+    v.inspectionDate || 'N/A',
+    v.insuranceDate || 'N/A',
+    v.tireChangeDate || 'N/A',
+  ])
+
+  const csvContent = [headers, ...rows]
+    .map((line) => line.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+
+  const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'bao-cao-bao-tri.csv'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
 const handleDeleteMaintenance = async () => {
   if (maintenanceToDelete.value) {
     try {
-      // Find and delete related maintenance records
+      // Chỉ xóa 1 lịch bảo trì gần nhất để tránh xóa toàn bộ lịch sử
       const vehicleMaintenances = maintenanceRecords.value.filter(
         m => m.xe_id === maintenanceToDelete.value.id
       )
-      for (const m of vehicleMaintenances) {
-        await maintenanceService.delete(m.id)
+
+      if (vehicleMaintenances.length === 0) {
+        alert('Xe này chưa có lịch sử bảo trì để xóa.')
+      } else {
+        const target = vehicleMaintenances
+          .slice()
+          .sort((a, b) => new Date(b.ngay_du_kien || b.tao_luc || 0) - new Date(a.ngay_du_kien || a.tao_luc || 0))[0]
+
+        await maintenanceService.delete(target.id)
+        alert('Đã xóa 1 lịch bảo trì gần nhất thành công!')
       }
-      alert('Xóa lịch bảo trì thành công!')
+
       fetchMaintenanceData()
     } catch (err) {
       alert('Có lỗi xảy ra: ' + (err.response?.data?.message || err.message))
@@ -329,7 +385,7 @@ const handleDeleteMaintenance = async () => {
           </div>
         </div>
         <div class="header-actions">
-          <button class="btn btn-secondary">
+          <button class="btn btn-secondary" @click="exportMaintenanceReport">
             <Icon icon="mdi:download" class="icon-sm" />
             Xuất báo cáo
           </button>
