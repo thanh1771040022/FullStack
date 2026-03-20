@@ -37,6 +37,32 @@ const allVehicles = ref([])
 const unreadAlertCount = ref(0)
 let unreadPollingTimer = null
 
+const globalToast = ref({
+  show: false,
+  message: '',
+})
+let globalToastTimer = null
+let originalAlert = null
+
+const showGlobalToast = (message) => {
+  globalToast.value = {
+    show: true,
+    message: String(message || ''),
+  }
+
+  if (globalToastTimer) {
+    clearTimeout(globalToastTimer)
+  }
+
+  globalToastTimer = setTimeout(() => {
+    globalToast.value.show = false
+  }, 3000)
+}
+
+const handleGlobalAlert = (event) => {
+  showGlobalToast(event?.detail || '')
+}
+
 // Fetch vehicles for search
 const fetchVehicles = async () => {
   try {
@@ -131,6 +157,14 @@ watch(() => route.path, () => {
 onMounted(() => {
   refreshAuthState()
   window.addEventListener('storage', refreshAuthState)
+  window.addEventListener('fleetpro:alert', handleGlobalAlert)
+
+  if (typeof window !== 'undefined') {
+    originalAlert = window.alert
+    window.alert = (message) => {
+      window.dispatchEvent(new CustomEvent('fleetpro:alert', { detail: String(message || '') }))
+    }
+  }
 
   if (isManager.value) {
     fetchUnreadAlerts()
@@ -140,9 +174,18 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('storage', refreshAuthState)
+  window.removeEventListener('fleetpro:alert', handleGlobalAlert)
+
+  if (typeof window !== 'undefined' && originalAlert) {
+    window.alert = originalAlert
+  }
 
   if (unreadPollingTimer) {
     clearInterval(unreadPollingTimer)
+  }
+
+  if (globalToastTimer) {
+    clearTimeout(globalToastTimer)
   }
 })
 
@@ -173,6 +216,13 @@ const userInitials = computed(() => {
 </script>
 
 <template>
+  <Transition name="app-toast-fade">
+    <div v-if="globalToast.show" class="app-toast">
+      <Icon icon="mdi:check-circle" class="icon-md" />
+      <span class="app-toast-message">{{ globalToast.message }}</span>
+    </div>
+  </Transition>
+
   <!-- Auth pages (Login/Register) or Driver Dashboard - no main layout -->
   <div v-if="!showMainLayout">
     <RouterView />
@@ -189,7 +239,11 @@ const userInitials = computed(() => {
           </button>
           <div class="brand">
             <div class="brand-logo">
-              <Icon icon="mdi:truck" class="icon-lg text-white" />
+              <img
+                src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/lamborghini/default.svg"
+                alt="Lamborghini"
+                class="brand-logo-image"
+              />
             </div>
             <div>
               <h1 class="brand-title">FleetPro</h1>
@@ -299,6 +353,39 @@ body {
   background-color: #f9fbf9;
 }
 
+.app-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(460px, calc(100vw - 24px));
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.app-toast-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.9rem;
+}
+
+.app-toast-fade-enter-active,
+.app-toast-fade-leave-active {
+  transition: all 0.2s ease;
+}
+
+.app-toast-fade-enter-from,
+.app-toast-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
 /* Icons */
 .icon-sm {
   width: 1rem;
@@ -369,12 +456,17 @@ body {
 .brand-logo {
   width: 2.5rem;
   height: 2.5rem;
-  background: linear-gradient(135deg, #4ef63b 0%, #3BD52A 100%);
+  background: #fff8df;
   border-radius: 0.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(78, 246, 59, 0.3);
+  box-shadow: 0 4px 12px rgba(138, 110, 0, 0.15);
+}
+
+.brand-logo-image {
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .brand-title {

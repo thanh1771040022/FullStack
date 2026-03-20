@@ -1786,10 +1786,10 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  color: #fff;
+  color: #1f2937;
   font-weight: 700;
-  background: linear-gradient(135deg, #0ea5e9, #2563eb);
-  box-shadow: 0 10px 28px rgba(37, 99, 235, 0.35);
+  background: linear-gradient(135deg, #FFB347, #FFCC33);
+  box-shadow: 0 10px 28px rgba(255, 179, 71, 0.35);
 }
 
 .driver-ai-panel {
@@ -1799,7 +1799,7 @@ onMounted(() => {
   width: min(420px, calc(100vw - 24px));
   max-height: 70vh;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ffe3a3;
   border-radius: 16px;
   overflow: hidden;
   z-index: 1099;
@@ -1810,8 +1810,8 @@ onMounted(() => {
 
 .driver-ai-header {
   padding: 12px 14px;
-  background: linear-gradient(135deg, #eff6ff, #e0f2fe);
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #fff8e6, #ffe9b8);
+  border-bottom: 1px solid #ffe3a3;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1849,9 +1849,9 @@ onMounted(() => {
 }
 
 .driver-ai-quick-btn {
-  border: 1px solid #dbeafe;
-  background: #f8fbff;
-  color: #1d4ed8;
+  border: 1px solid #ffd891;
+  background: #fff9ec;
+  color: #8a5a00;
   border-radius: 999px;
   padding: 6px 10px;
   font-size: 12px;
@@ -1895,8 +1895,8 @@ onMounted(() => {
 
 .driver-ai-msg.user {
   align-self: flex-end;
-  background: #dbeafe;
-  color: #1e3a8a;
+  background: #ffeabf;
+  color: #7a4a00;
 }
 
 .driver-ai-msg.agent {
@@ -1930,8 +1930,8 @@ onMounted(() => {
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #0ea5e9, #2563eb);
-  color: #fff;
+  background: linear-gradient(135deg, #FFB347, #FFCC33);
+  color: #1f2937;
   cursor: pointer;
 }
 

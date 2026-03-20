@@ -1,9 +1,8 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Icon } from '@iconify/vue'
 import MaintenanceModal from '@/components/modals/MaintenanceModal.vue'
 import MaintenanceDetailModal from '@/components/modals/MaintenanceDetailModal.vue'
-import ConfirmModal from '@/components/modals/ConfirmModal.vue'
 import { maintenanceService, vehicleService } from '@/services'
 
 // Loading & Error states
@@ -21,6 +20,30 @@ const selectedVehicleForDetail = ref(null)
 
 const showDeleteModal = ref(false)
 const maintenanceToDelete = ref(null)
+const selectedDeleteMaintenanceId = ref(null)
+
+const toast = ref({
+  show: false,
+  type: 'success',
+  message: '',
+})
+let toastTimer = null
+
+const showToast = (message, type = 'success') => {
+  toast.value = {
+    show: true,
+    type,
+    message,
+  }
+
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+  }
+
+  toastTimer = setTimeout(() => {
+    toast.value.show = false
+  }, 2800)
+}
 
 // Data from API
 const maintenanceRecords = ref([])
@@ -60,6 +83,12 @@ const fetchMaintenanceData = async () => {
 // Load data on mount
 onMounted(() => {
   fetchMaintenanceData()
+})
+
+onBeforeUnmount(() => {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+  }
 })
 
 // Computed vehicles with maintenance dates (from xe table)
@@ -205,7 +234,7 @@ const handleSaveMaintenance = async (data) => {
   try {
     const resolvedVehicleId = resolveVehicleId(data)
     if (!resolvedVehicleId) {
-      alert('Không tìm thấy xe tương ứng để lưu lịch bảo trì. Vui lòng chọn lại xe!')
+      showToast('Không tìm thấy xe tương ứng để lưu lịch bảo trì. Vui lòng chọn lại xe!', 'warning')
       return
     }
 
@@ -236,7 +265,7 @@ const handleSaveMaintenance = async (data) => {
         await vehicleService.update(resolvedVehicleId, vehicleUpdatePayload)
       }
       
-      alert('Thêm lịch bảo trì thành công!')
+      showToast('Thêm lịch bảo trì thành công!', 'success')
       fetchMaintenanceData()
     } else {
       // Update vehicle dates directly in xe table
@@ -256,12 +285,12 @@ const handleSaveMaintenance = async (data) => {
         await vehicleService.update(vehicleId, vehicleUpdatePayload)
       }
       
-      alert('Cập nhật thông tin thành công!')
+      showToast('Cập nhật thông tin thành công!', 'success')
       fetchMaintenanceData()
     }
   } catch (err) {
     console.error('Error saving maintenance:', err)
-    alert('Có lỗi xảy ra: ' + (err.response?.data?.message || err.message))
+    showToast('Có lỗi xảy ra: ' + (err.response?.data?.message || err.message), 'error')
   }
 }
 
@@ -284,7 +313,18 @@ const getMaintenanceTypeId = (type) => {
 
 const openDeleteModal = (vehicle) => {
   maintenanceToDelete.value = vehicle
+  const candidates = maintenanceRecords.value
+    .filter((m) => Number(m.xe_id) === Number(vehicle.id))
+    .sort((a, b) => new Date(b.ngay_du_kien || b.tao_luc || 0) - new Date(a.ngay_du_kien || a.tao_luc || 0))
+
+  selectedDeleteMaintenanceId.value = candidates.length > 0 ? Number(candidates[0].id) : null
   showDeleteModal.value = true
+}
+
+const closeDeleteModal = () => {
+  showDeleteModal.value = false
+  maintenanceToDelete.value = null
+  selectedDeleteMaintenanceId.value = null
 }
 
 const resolveVehicleId = (data) => {
@@ -301,7 +341,7 @@ const resolveVehicleId = (data) => {
 
 const exportMaintenanceReport = () => {
   if (!filteredVehicles.value.length) {
-    alert('Không có dữ liệu để xuất báo cáo!')
+    showToast('Không có dữ liệu để xuất báo cáo!', 'warning')
     return
   }
 
@@ -329,36 +369,62 @@ const exportMaintenanceReport = () => {
   URL.revokeObjectURL(url)
 }
 
+const deleteCandidates = computed(() => {
+  if (!maintenanceToDelete.value) return []
+  return maintenanceRecords.value
+    .filter((m) => Number(m.xe_id) === Number(maintenanceToDelete.value.id))
+    .sort((a, b) => new Date(b.ngay_du_kien || b.tao_luc || 0) - new Date(a.ngay_du_kien || a.tao_luc || 0))
+})
+
+const formatDeleteDate = (dateValue) => {
+  if (!dateValue) return 'N/A'
+  const d = new Date(dateValue)
+  if (Number.isNaN(d.getTime())) return 'N/A'
+  return d.toLocaleDateString('vi-VN')
+}
+
 const handleDeleteMaintenance = async () => {
   if (maintenanceToDelete.value) {
     try {
-      // Chỉ xóa 1 lịch bảo trì gần nhất để tránh xóa toàn bộ lịch sử
-      const vehicleMaintenances = maintenanceRecords.value.filter(
-        m => m.xe_id === maintenanceToDelete.value.id
-      )
+      const vehicleMaintenances = deleteCandidates.value
+      const selectedId = Number(selectedDeleteMaintenanceId.value)
 
       if (vehicleMaintenances.length === 0) {
-        alert('Xe này chưa có lịch sử bảo trì để xóa.')
+        showToast('Xe này chưa có lịch sử bảo trì để xóa.', 'warning')
+      } else if (!Number.isFinite(selectedId)) {
+        showToast('Vui lòng chọn lịch bảo trì cần xóa.', 'warning')
       } else {
-        const target = vehicleMaintenances
-          .slice()
-          .sort((a, b) => new Date(b.ngay_du_kien || b.tao_luc || 0) - new Date(a.ngay_du_kien || a.tao_luc || 0))[0]
+        const target = vehicleMaintenances.find((m) => Number(m.id) === selectedId)
+        if (!target) {
+          showToast('Lịch bảo trì đã chọn không tồn tại. Vui lòng thử lại.', 'warning')
+          return
+        }
 
         await maintenanceService.delete(target.id)
-        alert('Đã xóa 1 lịch bảo trì gần nhất thành công!')
+        showToast('Đã xóa lịch bảo trì đã chọn thành công!', 'success')
       }
 
       fetchMaintenanceData()
     } catch (err) {
-      alert('Có lỗi xảy ra: ' + (err.response?.data?.message || err.message))
+      showToast('Có lỗi xảy ra: ' + (err.response?.data?.message || err.message), 'error')
     }
-    maintenanceToDelete.value = null
+    closeDeleteModal()
   }
 }
 </script>
 
 <template>
   <div class="maintenance-page">
+    <Transition name="toast-fade">
+      <div v-if="toast.show" class="toast" :class="`toast-${toast.type}`">
+        <Icon
+          :icon="toast.type === 'success' ? 'mdi:check-circle' : toast.type === 'error' ? 'mdi:alert-circle' : 'mdi:alert'"
+          class="toast-icon"
+        />
+        <span>{{ toast.message }}</span>
+      </div>
+    </Transition>
+
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
       <Icon icon="mdi:loading" class="loading-icon" />
@@ -615,16 +681,52 @@ const handleDeleteMaintenance = async () => {
       @close="showDetailModal = false"
     />
 
-    <!-- Delete Confirmation Modal -->
-    <ConfirmModal
-      :show="showDeleteModal"
-      title="Xác nhận xóa lịch bảo trì"
-      :message="`Bạn có chắc chắn muốn xóa lịch bảo trì của xe ${maintenanceToDelete?.licensePlate || ''}? Hành động này không thể hoàn tác.`"
-      confirm-text="Xóa"
-      type="danger"
-      @close="showDeleteModal = false"
-      @confirm="handleDeleteMaintenance"
-    />
+    <Teleport to="body">
+      <div v-if="showDeleteModal" class="modal-overlay" @click.self="closeDeleteModal">
+        <div class="delete-modal-container">
+          <div class="delete-modal-header">
+            <h3>Xóa lịch bảo trì</h3>
+            <p>Chọn 1 lịch bảo trì của xe {{ maintenanceToDelete?.licensePlate || '' }} để xóa.</p>
+          </div>
+
+          <div v-if="deleteCandidates.length > 0" class="delete-options-list">
+            <label
+              v-for="item in deleteCandidates"
+              :key="item.id"
+              class="delete-option-item"
+            >
+              <input
+                v-model.number="selectedDeleteMaintenanceId"
+                type="radio"
+                name="maintenance-delete-option"
+                :value="Number(item.id)"
+              />
+              <div class="delete-option-content">
+                <p class="delete-option-title">{{ item.loai_bao_tri_ten || 'Bảo trì' }} - {{ formatDeleteDate(item.ngay_du_kien) }}</p>
+                <p class="delete-option-meta">
+                  Trạng thái: {{ item.trang_thai || 'N/A' }}
+                  - Chi phí: {{ Number(item.tong_chi_phi || 0).toLocaleString('vi-VN') }} đ
+                </p>
+              </div>
+            </label>
+          </div>
+
+          <div v-else class="delete-empty">Xe này chưa có lịch sử bảo trì để xóa.</div>
+
+          <div class="delete-modal-actions">
+            <button type="button" class="btn btn-secondary" @click="closeDeleteModal">Hủy</button>
+            <button
+              type="button"
+              class="btn btn-danger-solid"
+              :disabled="deleteCandidates.length === 0 || !selectedDeleteMaintenanceId"
+              @click="handleDeleteMaintenance"
+            >
+              Xóa lịch đã chọn
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -632,6 +734,49 @@ const handleDeleteMaintenance = async () => {
 .maintenance-page {
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.2);
+  max-width: 420px;
+}
+
+.toast-success {
+  background: #16a34a;
+}
+
+.toast-error {
+  background: #dc2626;
+}
+
+.toast-warning {
+  background: #d97706;
+}
+
+.toast-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.toast-fade-enter-active,
+.toast-fade-leave-active {
+  transition: all 0.2s ease;
+}
+
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 /* Loading and Error States */
@@ -744,6 +889,20 @@ const handleDeleteMaintenance = async () => {
   background: #f9fafb;
 }
 
+.btn-danger-solid {
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-danger-solid:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.btn-danger-solid:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn-icon {
   padding: 0.5rem;
   border-radius: 0.375rem;
@@ -760,6 +919,100 @@ const handleDeleteMaintenance = async () => {
 .btn-icon-danger:hover {
   background: #fef2f2;
   color: #dc2626;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 1rem;
+}
+
+.delete-modal-container {
+  width: 100%;
+  max-width: 600px;
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.delete-modal-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.delete-modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.delete-modal-header p {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.delete-options-list {
+  max-height: 320px;
+  overflow: auto;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.delete-option-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.75rem;
+  cursor: pointer;
+}
+
+.delete-option-item:hover {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.delete-option-content {
+  flex: 1;
+}
+
+.delete-option-title {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #111827;
+  font-weight: 600;
+}
+
+.delete-option-meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.delete-empty {
+  padding: 1rem 1.25rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.delete-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.9rem 1.25rem;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
 }
 
 .icon-sm {

@@ -342,6 +342,92 @@ const getColorClass = (color) => {
   return `kpi-${color}`
 }
 
+const exportDashboardReport = () => {
+  if (loading.value) {
+    window.alert('Dữ liệu đang tải, vui lòng thử lại sau vài giây.')
+    return
+  }
+
+  if (vehicles.value.length === 0 && fuelData.value.length === 0 && alertsData.value.length === 0) {
+    window.alert('Không có dữ liệu để xuất báo cáo.')
+    return
+  }
+
+  const year = selectedYear.value
+  const kpi = kpiData.value
+
+  const lines = []
+  lines.push(['FleetPro Dashboard Report'])
+  lines.push([`Thoi gian xuat`, new Date().toLocaleString('vi-VN')])
+  lines.push([`Nam phan tich`, String(year)])
+  lines.push([])
+
+  lines.push(['KPI'])
+  lines.push(['Chi so', 'Gia tri'])
+  kpi.forEach((item) => {
+    lines.push([item.title, String(item.value)])
+  })
+  lines.push([])
+
+  lines.push(['Chi phi nhien lieu theo thang (trieu VND)'])
+  lines.push(['Thang', 'Gia tri'])
+  const monthlyDataset = fuelTrendData.value?.datasets?.[0]?.data || []
+  const monthlyLabels = fuelTrendData.value?.labels || []
+  monthlyLabels.forEach((label, index) => {
+    lines.push([String(label), String(monthlyDataset[index] || 0)])
+  })
+  lines.push([])
+
+  lines.push(['Phan bo chi phi nhien lieu theo loai xe (trieu VND)'])
+  lines.push(['Loai xe', 'Gia tri'])
+  const typeDataset = fuelCostData.value?.datasets?.[0]?.data || []
+  const typeLabels = fuelCostData.value?.labels || []
+  typeLabels.forEach((label, index) => {
+    lines.push([String(label), String(typeDataset[index] || 0)])
+  })
+  lines.push([])
+
+  lines.push(['Canh bao gan day'])
+  lines.push(['Thoi gian', 'Loai', 'Muc do', 'Tieu de'])
+  recentFuelAlerts.value.forEach((item) => {
+    lines.push([
+      formatDateTime(item.tao_luc),
+      getAlertTypeText(item.loai_canh_bao),
+      String(item.muc_do || ''),
+      String(item.tieu_de || 'Canh bao he thong'),
+    ])
+  })
+  lines.push([])
+
+  lines.push(['Lich bao tri sap toi'])
+  lines.push(['Bien so', 'Loai xe', 'Loai han', 'Ngay den han', 'Trang thai'])
+  maintenanceSchedule.value.forEach((item) => {
+    lines.push([
+      item.licensePlate,
+      item.vehicleType,
+      item.maintenanceType,
+      formatDate(item.dueDate),
+      getStatusText(item.status),
+    ])
+  })
+
+  const csvContent = lines
+    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+
+  const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `dashboard-report-${year}-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+
+  window.alert('Đã xuất báo cáo Dashboard thành công.')
+}
+
 const buildAgentText = (payload) => {
   if (!payload) return 'Không nhận được dữ liệu từ AI Agent.'
 
@@ -473,7 +559,7 @@ watch(chatLoading, () => {
         <p class="page-subtitle">Tổng quan hệ thống quản lý đội xe</p>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary">
+        <button class="btn btn-secondary" @click="exportDashboardReport">
           <Icon icon="mdi:download" class="icon-sm" />
           Xuất báo cáo
         </button>
